@@ -184,7 +184,7 @@ static inline void	parse_cmd(command_t *restrict cmd,
 	cmd->command = cmd->argv[0];
 }
 
-static inline void	add_redir_tofile(const char *path) {
+inline void	add_redir_tofile(const char *path) {
 	int	fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
 
 	if (-1 == fd)
@@ -211,7 +211,7 @@ int	main(int argc, char *argv[]) {
 
 	__dbg_lvl_callback[dbg_level]("parent: %d\n", getpid());
 
-	add_redir_tofile("/home/ipaldesse/result.out");
+	// add_redir_tofile("/home/ipaldesse/result.out");
 	init_sigchld_handler();
 
 	while (1) {
