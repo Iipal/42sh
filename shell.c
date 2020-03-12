@@ -18,6 +18,7 @@
 #include <sys/wait.h>
 #include <errno.h>
 #include <stdarg.h>
+#include <getopt.h>
 
 typedef struct {
 	char *restrict	command;
@@ -36,9 +37,10 @@ static inline command_t	*cmddupp(const command_t *restrict src) {
 static pid_t	child;
 
 static command_t	**cq = { NULL }; // cq - commands queue
-static size_t		cq_size = 0;
+static size_t	cq_size = 0;
 
 static int	dbg_level = 0;
+static int	stdout_tofile = 0;
 
 static inline void	__dbg_info_none(const char *restrict fmt, ...) {
 	(void)fmt;
@@ -184,7 +186,7 @@ static inline void	parse_cmd(command_t *restrict cmd,
 	cmd->command = cmd->argv[0];
 }
 
-inline void	add_redir_tofile(const char *path) {
+static inline void	add_redir_tofile(const char *path) {
 	int	fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
 
 	if (-1 == fd)
@@ -203,16 +205,33 @@ static inline void	init_sigchld_handler(void) {
 		err(EXIT_FAILURE, "sigaction");
 }
 
-int	main(int argc, char *argv[]) {
-	if (argc >= 2) {
-		if (!strcmp(argv[1], "-d") || !strcmp(argv[1], "--debug"))
-			dbg_level = 1;
+static inline void	parse_opt(int ac, char *const *av) {
+	static const struct option	l_opts[] = {
+		{ "debug", no_argument, &dbg_level    , 1 },
+		{ "file" , no_argument, &stdout_tofile, 1 },
+		{ 0      , 0          , 0             , 0 }
+	};
+
+	int	opt;
+	while (-1 != (opt = getopt_long(ac, av, "df", l_opts, NULL))) {
+		switch (opt) {
+			case 'd': dbg_level      = 1; break ;
+			case 'f': stdout_tofile  = 1; break ;
+			case '?': exit(EXIT_FAILURE); break ;
+			default :                     break ;
+		}
 	}
+}
+
+int	main(int argc, char *argv[]) {
+	parse_opt(argc, argv);
 
 	__dbg_lvl_callback[dbg_level]("parent: %d\n", getpid());
 
-	// add_redir_tofile("/home/ipaldesse/result.out");
 	init_sigchld_handler();
+	if (stdout_tofile) {
+		add_redir_tofile("./result.out");
+	}
 
 	while (1) {
 		fprintf(stderr, "$> ");
