@@ -61,28 +61,32 @@ static inline size_t	cq_precalc_size(char *restrict line) {
 }
 
 static char	*line_trim_extra_ws(const char *restrict src) {
-	char	*copy = strdupa(src);
-	size_t	n = 0;
+	char	*acopy = NULL;
 	size_t	start = 0;
 	size_t	end = strlen(src);
 
-	while (copy[start] && isspace(start)) {
+	assert(acopy = strdupa(src));
+	while (acopy[start] && isspace(start)) {
 		++start;
 	}
-	while (start < end && isspace(copy[end - 1])) {
+	while (start < end && isspace(acopy[end - 1])) {
 		--end;
 	}
-	if (!copy[start] || start == end) {
+	if (!acopy[start] || start == end) {
 		return NULL;
 	}
 
-	for (size_t i = start; end > i && copy[i]; ++i) {
-		if (!isspace(copy[i]) || (0 < i && !isspace(copy[i - 1]))) {
-			copy[n++] = copy[i];
+	size_t	n = 0;
+	for (size_t i = start; end > i && acopy[i]; ++i) {
+		if (!isspace(acopy[i]) || (0 < i && !isspace(acopy[i - 1]))) {
+			acopy[n++] = acopy[i];
 		}
 	}
-	copy[n] = 0;
-	return strndup(copy, n);
+	acopy[n] = 0;
+
+	char	*out;
+	assert(out = strndup(acopy, n));
+	return out;
 }
 
 static inline void	add_redir_tofile(const char *path) {
@@ -134,22 +138,24 @@ static inline void	parse_opt(int ac, char *const *av) {
 }
 
 static char	*line_put_sep_space(const char *restrict str, int sep) {
-	char	*out = calloc(1024, sizeof(*out));
+	char	*out;
 	char	*sep_ptr = strchr(str, sep);
 
-	strcpy(out, str);
+	assert(out = strdup(str));
 	while (sep_ptr) {
-		size_t	len = 0;
+		size_t	sep_len = 0;
 		if (sep_ptr > str && !isspace(sep_ptr[-1])) {
-			len = strstr(out, sep_ptr) - out;
-			out[len++] = ' ';
-			out[len++] = sep;
-			strcpy(out + len, sep_ptr + 1);
+			sep_len = strstr(out, sep_ptr) - out;
+			assert(out = realloc(out, strlen(out) + 2));
+			out[sep_len++] = ' ';
+			out[sep_len++] = sep;
+			strcpy(out + sep_len, sep_ptr + 1);
 		}
 		if (!isspace(sep_ptr[1])) {
-			len = strstr(out, sep_ptr) - out + 1;
-			out[len++] = ' ';
-			strcpy(out + len, sep_ptr + 1);
+			sep_len = strstr(out, sep_ptr) - out + 1;
+			assert(out = realloc(out, strlen(out) + 1));
+			out[sep_len++] = ' ';
+			strcpy(out + sep_len, sep_ptr + 1);
 		}
 		sep_ptr = strchr(sep_ptr + 1, sep);
 	}
@@ -167,11 +173,11 @@ static inline void	cmd_parseline(char *restrict line,
 
 	while (token) {
 		if (!cq[cq_iter]) {
-			cq[cq_iter] = calloc(1, sizeof(*cq));
+			assert(cq[cq_iter] = calloc(1, sizeof(**cq)));
 		}
-		cq[cq_iter]->argv = realloc(cq[cq_iter]->argv,
-			sizeof(*(cq[cq_iter]->argv)) * (cq[cq_iter]->argc + 2));
-		cq[cq_iter]->argv[cq[cq_iter]->argc++] = strdup(token);
+		assert(cq[cq_iter]->argv = realloc(cq[cq_iter]->argv,
+			sizeof(*(cq[cq_iter]->argv)) * (cq[cq_iter]->argc + 2)));
+		assert(cq[cq_iter]->argv[cq[cq_iter]->argc++] = strdup(token));
 		cq[cq_iter]->argv[cq[cq_iter]->argc] = NULL;
 		if ('|' == *save) {
 			++cq_iter;
@@ -209,7 +215,7 @@ static inline void	benv(void) {
 	printf("builtin: env\n");
 }
 static inline void	bexit(void) {
-	exit(EXIT_SUCCESS);
+	_Exit(EXIT_SUCCESS);
 }
 
 static inline bool	cmd_builtinrun(const char *restrict command) {
@@ -269,12 +275,9 @@ int	main(int argc, char *argv[]) {
 			continue ;
 		}
 
-		const size_t	cq_size = cq_precalc_size(line);
-		command_t	**cq = NULL;
-
-		if (!(cq = calloc(cq_size + 1, sizeof(*cq)))) {
-			continue ;
-		}
+		command_t	**cq;
+		size_t	cq_size = cq_precalc_size(line);
+		assert(cq = calloc(cq_size + 1, sizeof(*cq)));
 		cmd_parseline(line, cq);
 		cmd_run(cq_size, cq);
 	}
