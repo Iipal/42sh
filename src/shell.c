@@ -1,64 +1,4 @@
-/*
-	Reading and execution commands like this from code:
-	`who | sort | uniq -c | sort -nk1`
-*/
-
-#define _GNU_SOURCE
-
-#include <stdbool.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-#include <assert.h>
-#include <err.h>
-#include <ctype.h>
-#include <fcntl.h>
-#include <signal.h>
-#include <sys/wait.h>
-#include <errno.h>
-#include <stdarg.h>
-#include <getopt.h>
-
-# define EXEC_ERR_FMTMSG "can not run '%s'"
-
-typedef struct {
-	char	**argv;
-	int	argc;
-} command_t;
-
-# define CMD_INIT { .argv = NULL, .argc = 0 }
-
-static inline command_t	*cmddupp(const command_t *restrict src) {
-	return memcpy(calloc(1, sizeof(*src)), src, sizeof(*src));
-}
-
-static pid_t	child;
-
-static int	dbg_level = 0;
-static int	stdout_tofile = 0;
-
-static inline void	__dbg_info_none(const char *restrict fmt, ...) {
-	(void)fmt;
-}
-
-static inline void	__dbg_info_dflt(const char *restrict fmt, ...) {
-	va_list	ap;
-
-	va_start(ap, fmt);
-	vfprintf(stderr, fmt, ap);
-	va_end(ap);
-}
-
-static void	(*__dbg_lvl_callback[2])(const char *restrict fmt, ...) = {
-	__dbg_info_none, __dbg_info_dflt
-};
-
-# define DBG_INFO(fmt, ...) __extension__({ \
-	if (dbg_level) { \
-		__dbg_lvl_callback[dbg_level](fmt, __VA_ARGS__); \
-	} \
-})
+#include "minishell.h"
 
 static inline void	pipe_redir(int from, int to, int trash) {
 	dup2(from, to);
@@ -120,7 +60,7 @@ static inline size_t	cq_precalc_size(char *restrict line) {
 	return n;
 }
 
-static char	*cmd_line_trimextraws(const char *restrict src) {
+static char	*line_trim_extra_ws(const char *restrict src) {
 	char	*copy = strdupa(src);
 	size_t	n = 0;
 	size_t	start = 0;
@@ -193,34 +133,53 @@ static inline void	parse_opt(int ac, char *const *av) {
 	}
 }
 
-static inline void	cmd_separate_av_cmd(command_t *restrict cmd,
-									const char *restrict line) {
-	char	*delim = strchr(line, ' ');
+static char	*line_put_sep_space(const char *restrict str, int sep) {
+	char	*out = calloc(1024, sizeof(*out));
+	char	*sep_ptr = strchr(str, sep);
 
-	cmd->argc = 1;
-	while (delim) {
-		++cmd->argc;
-		delim = strchr(delim + 1, ' ');
-	}
-	cmd->argv = calloc(cmd->argc + 1, sizeof(*(cmd->argv)));
-	if (1 == cmd->argc) {
-		cmd->argv[0] = strdup(line);
-	} else {
-		delim = strchr(line, ' ');
-		cmd->argv[0] = strndup(line, delim - line);
-		for (int i = 1; delim && cmd->argc > i; i++) {
-			char	*endptr;
-			size_t	duplen;
-
-			if (!(endptr = strchr(++delim, ' '))) {
-				duplen = strlen(delim);
-			} else {
-				duplen = endptr - delim;
-			}
-			cmd->argv[i] = strndup(delim, duplen);
-			delim = endptr;
+	strcpy(out, str);
+	while (sep_ptr) {
+		size_t	len = 0;
+		if (sep_ptr > str && !isspace(sep_ptr[-1])) {
+			len = strstr(out, sep_ptr) - out;
+			out[len++] = ' ';
+			out[len++] = sep;
+			strcpy(out + len, sep_ptr + 1);
 		}
+		if (!isspace(sep_ptr[1])) {
+			len = strstr(out, sep_ptr) - out + 1;
+			out[len++] = ' ';
+			strcpy(out + len, sep_ptr + 1);
+		}
+		sep_ptr = strchr(sep_ptr + 1, sep);
 	}
+	return out;
+}
+
+static inline void	cmd_parseline(char *restrict line,
+					command_t *restrict *restrict cq) {
+	char	*tmp = line_trim_extra_ws(line);
+	char	*sep_line = line_put_sep_space(tmp, '|');
+
+	char	*save = NULL;
+	char	*token = strtok_r(sep_line, " |", &save);
+	size_t	cq_iter = 0;
+
+	while (token) {
+		if (!cq[cq_iter]) {
+			cq[cq_iter] = calloc(1, sizeof(*cq));
+		}
+		cq[cq_iter]->argv = realloc(cq[cq_iter]->argv,
+			sizeof(*(cq[cq_iter]->argv)) * (cq[cq_iter]->argc + 2));
+		cq[cq_iter]->argv[cq[cq_iter]->argc++] = strdup(token);
+		cq[cq_iter]->argv[cq[cq_iter]->argc] = NULL;
+		if ('|' == *save) {
+			++cq_iter;
+		}
+		token = strtok_r(NULL, " |", &save);
+	}
+	free(tmp);
+	free(sep_line);
 }
 
 static inline void	cmd_solorun(const command_t *restrict cmd) {
@@ -231,25 +190,6 @@ static inline void	cmd_solorun(const command_t *restrict cmd) {
 	} else {
 		DBG_INFO("parent | %d(%d)\n", getpid(), getppid());
 		pause();
-	}
-}
-
-static inline void	cmd_parseline(char *restrict line,
-					command_t *restrict *restrict cq) {
-	char *restrict	token = strtok(line, "|");
-	size_t	i = 0;
-
-	while (token) {
-		command_t	curr_cmd = CMD_INIT;
-		char *restrict trimed = cmd_line_trimextraws(token);
-		if (!trimed || !*trimed) {
-			break ;
-		}
-
-		cmd_separate_av_cmd(&curr_cmd, trimed);
-		cq[i++] = cmddupp(&curr_cmd);
-		free(trimed);
-		token = strtok(NULL, "|");
 	}
 }
 
