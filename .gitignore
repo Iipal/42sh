@@ -1,0 +1,10 @@
+.vscode/
+.VScode/
+**.o
+**.a
+**.S
+**.d
+**.DS_Store
+test/
+**.gitkeep
+minishell
