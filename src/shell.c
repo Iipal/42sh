@@ -35,9 +35,6 @@ static inline command_t	*cmddupp(const command_t *restrict src) {
 
 static pid_t	child;
 
-static command_t	**g_cq = { NULL }; // g_cq - commands queue
-static size_t	g_cq_size = 0;
-
 static int	dbg_level = 0;
 static int	stdout_tofile = 0;
 
@@ -57,17 +54,26 @@ static void	(*__dbg_lvl_callback[2])(const char *restrict fmt, ...) = {
 	__dbg_info_none, __dbg_info_dflt
 };
 
-static inline void
-pipe_redir(int from, int to, int trash) {
+# define DBG_INFO(fmt, ...) __extension__({ \
+	if (dbg_level) { \
+		__dbg_lvl_callback[dbg_level](fmt, __VA_ARGS__); \
+	} \
+})
+
+static inline void	pipe_redir(int from, int to, int trash) {
 	dup2(from, to);
 	close(from);
-	if (trash != -1)
+	if (trash != -1) {
 		close(trash);
+	}
 }
 
-static void	cmd_pipe_queuing(const ssize_t isender, const ssize_t ireceiver) {
-	if (-1 >= isender)
+static void	cmd_pipe_queuing(const ssize_t isender,
+							const ssize_t ireceiver,
+							command_t *restrict *restrict cq) {
+	if (-1 >= isender) {
 		return ;
+	}
 
 	int	fds[2] = { 0 };
 
@@ -75,22 +81,19 @@ static void	cmd_pipe_queuing(const ssize_t isender, const ssize_t ireceiver) {
 	assert(-1 != (child = fork()));
 
 	if (!child) {
-		__dbg_lvl_callback[dbg_level](
-			"child  | %d(%d) '%s' wait for input from '%s'\n",
-			getpid(), getppid(),
-			g_cq[ireceiver]->argv[0], g_cq[isender]->argv[0]);
 		pipe_redir(fds[1], STDOUT_FILENO, fds[0]);
-		cmd_pipe_queuing(isender - 1, isender);
-		__dbg_lvl_callback[dbg_level]("child  | %d(%d) '%s' created\n",
-			getpid(), getppid(), g_cq[isender]->argv[0]);
-		execvp(g_cq[isender]->argv[0], g_cq[isender]->argv);
-		err(EXIT_FAILURE, EXEC_ERR_FMTMSG, g_cq[isender]->argv[0]);
-	} else {
-		__dbg_lvl_callback[dbg_level]("parent | %d(%d) '%s'\n",
-			getpid(), getppid(), g_cq[ireceiver]->argv[0]);
+		cmd_pipe_queuing(isender - 1, isender, cq);
+		DBG_INFO("child  | %d(%d) '%s' created\n",
+			getpid(), getppid(), cq[isender]->argv[0]);
+		execvp(cq[isender]->argv[0], cq[isender]->argv);
+		err(EXIT_FAILURE, EXEC_ERR_FMTMSG, cq[isender]->argv[0]);
+	} else if (0 < child) {
+		DBG_INFO("child  | %d(%d) '%s' wait for input from '%s'\n",
+			getpid(), getppid(),
+			cq[ireceiver]->argv[0], cq[isender]->argv[0]);
 		pipe_redir(fds[0], STDIN_FILENO, fds[1]);
-		execvp(g_cq[ireceiver]->argv[0], g_cq[ireceiver]->argv);
-		err(EXIT_FAILURE, EXEC_ERR_FMTMSG, g_cq[ireceiver]->argv[0]);
+		execvp(cq[ireceiver]->argv[0], cq[ireceiver]->argv);
+		err(EXIT_FAILURE, EXEC_ERR_FMTMSG, cq[ireceiver]->argv[0]);
 	}
 }
 
@@ -99,13 +102,14 @@ static inline char	*cmd_readline(void) {
 	size_t	n = 0;
 	ssize_t	nb = getline(&out, &n, stdin);
 
-	if (!nb || !out)
+	if (!nb || !out) {
 		return NULL;
+	}
 	*((short*)(out + nb - 1)) = 0;
 	return out;
 }
 
-static inline size_t	precalc_cq_size(char *restrict line) {
+static inline size_t	cq_precalc_size(char *restrict line) {
 	size_t	n = 1;
 	char	*l = strchr(line, '|');
 
@@ -116,22 +120,27 @@ static inline size_t	precalc_cq_size(char *restrict line) {
 	return n;
 }
 
-static char	*trim_extra_ws(const char *restrict src) {
+static char	*cmd_line_trimextraws(const char *restrict src) {
 	char	*copy = strdupa(src);
 	size_t	n = 0;
 	size_t	start = 0;
 	size_t	end = strlen(src);
 
-	while (copy[start] && isspace(start))
+	while (copy[start] && isspace(start)) {
 		++start;
-	while (start < end && isspace(copy[end - 1]))
+	}
+	while (start < end && isspace(copy[end - 1])) {
 		--end;
-	if (!copy[start] || start == end)
+	}
+	if (!copy[start] || start == end) {
 		return NULL;
+	}
 
-	for (size_t i = start; end > i && copy[i]; ++i)
-		if (!isspace(copy[i]) || (0 < i && !isspace(copy[i - 1])))
+	for (size_t i = start; end > i && copy[i]; ++i) {
+		if (!isspace(copy[i]) || (0 < i && !isspace(copy[i - 1]))) {
 			copy[n++] = copy[i];
+		}
+	}
 	copy[n] = 0;
 	return strndup(copy, n);
 }
@@ -147,11 +156,12 @@ static inline void	add_redir_tofile(const char *path) {
 }
 
 static void	wait_child(int s) {
-	__dbg_lvl_callback[dbg_level]("waiting for end of: %d\n", child);
-	if (1 > child) // -> (0 == child || -1 == child)
+	DBG_INFO("wait   | %d\n", child);
+	if (1 > child) {
 		wait(&s);
-	else
+	} else {
 		waitpid(child, &s, WUNTRACED | WNOHANG);
+	}
 }
 
 static inline void	init_sigchld_handler(void) {
@@ -160,8 +170,9 @@ static inline void	init_sigchld_handler(void) {
 	sa.sa_flags = SA_RESTART | SA_NODEFER;
 	sa.sa_handler = wait_child;
 
-	if (-1 == sigaction(SIGCHLD, &sa, NULL))
+	if (-1 == sigaction(SIGCHLD, &sa, NULL)) {
 		err(EXIT_FAILURE, "sigaction");
+	}
 }
 
 static inline void	parse_opt(int ac, char *const *av) {
@@ -198,10 +209,10 @@ static inline void	cmd_separate_av_cmd(command_t *restrict cmd,
 		delim = strchr(line, ' ');
 		cmd->argv[0] = strndup(line, delim - line);
 		for (int i = 1; delim && cmd->argc > i; i++) {
-			char	*endptr = strchr(++delim, ' ');
-			size_t	duplen = 0;
+			char	*endptr;
+			size_t	duplen;
 
-			if (!endptr) {
+			if (!(endptr = strchr(++delim, ' '))) {
 				duplen = strlen(delim);
 			} else {
 				duplen = endptr - delim;
@@ -214,46 +225,96 @@ static inline void	cmd_separate_av_cmd(command_t *restrict cmd,
 
 static inline void	cmd_solorun(const command_t *restrict cmd) {
 	if (!(child = fork())) {
-		__dbg_lvl_callback[dbg_level]("child  | %d(%d) '%s'\n",
-			getpid(), getppid(), cmd->argv[0]);
+		DBG_INFO("child  | %d(%d) '%s'\n", getpid(), getppid(), cmd->argv[0]);
 		execvp(cmd->argv[0], cmd->argv);
 		err(EXIT_FAILURE, EXEC_ERR_FMTMSG, cmd->argv[0]);
 	} else {
-		__dbg_lvl_callback[dbg_level]("parent | %d(%d)\n",
-			getpid(), getppid());
+		DBG_INFO("parent | %d(%d)\n", getpid(), getppid());
 		pause();
 	}
 }
 
-static inline void	cmd_parseline(char *restrict line) {
-	command_t	curr_cmd = CMD_INIT;
+static inline void	cmd_parseline(char *restrict line,
+					command_t *restrict *restrict cq) {
 	char *restrict	token = strtok(line, "|");
-	char *restrict	trimed = NULL;
 	size_t	i = 0;
 
 	while (token) {
-		trimed = trim_extra_ws(token);
-		if (!trimed || !*trimed)
+		command_t	curr_cmd = CMD_INIT;
+		char *restrict trimed = cmd_line_trimextraws(token);
+		if (!trimed || !*trimed) {
 			break ;
+		}
+
 		cmd_separate_av_cmd(&curr_cmd, trimed);
-		g_cq[i++] = cmddupp(&curr_cmd);
+		cq[i++] = cmddupp(&curr_cmd);
 		free(trimed);
 		token = strtok(NULL, "|");
 	}
-	if (1 < g_cq_size) {
-		if (!(child = fork()))
-			cmd_pipe_queuing(g_cq_size - 2, g_cq_size - 1);
-		else if (child)
+}
+
+static inline void	becho(void) {
+	printf("builtin: echo\n");
+}
+static inline void	bcd(void) {
+	printf("builtin: cd\n");
+}
+static inline void	bsetenv(void) {
+	printf("builtin: setenv\n");
+}
+static inline void	bunsetenv(void) {
+	printf("builtin: unsetenv\n");
+}
+static inline void	benv(void) {
+	printf("builtin: env\n");
+}
+static inline void	bexit(void) {
+	exit(EXIT_SUCCESS);
+}
+
+static inline bool	cmd_builtinrun(const char *restrict command) {
+	static void	(*cmd_fnptr_builtins[])(void) = {
+		becho, bcd, bsetenv, bunsetenv, benv, bexit, NULL
+	};
+	static const char	*cmd_str_builtins[] = {
+		"echo", "cd", "setenv", "unsetenv", "env", "exit", NULL
+	};
+
+	size_t	i;
+	for (i = 0; cmd_str_builtins[i]; i++) {
+		if (!strcmp(command, cmd_str_builtins[i])) {
+			break ;
+		}
+	}
+
+	if (cmd_str_builtins[i]) {
+		cmd_fnptr_builtins[i]();
+		return true;
+	}
+	return false;
+}
+
+static inline void	cmd_run(const size_t cq_size,
+		command_t *restrict *restrict cq) {
+	if (cmd_builtinrun(cq[0]->argv[0])) {
+		return ;
+	}
+
+	if (1 < cq_size) {
+		if (!(child = fork())) {
+			cmd_pipe_queuing(cq_size - 2, cq_size - 1, cq);
+		} else if (0 < child) {
 			pause();
+		}
 	} else {
-		cmd_solorun(g_cq[0]);
+		cmd_solorun(cq[0]);
 	}
 }
 
 int	main(int argc, char *argv[]) {
 	parse_opt(argc, argv);
 
-	__dbg_lvl_callback[dbg_level]("parent: %d\n", getpid());
+	DBG_INFO("pid   : %d(%d)\n", getpid(), getppid());
 
 	init_sigchld_handler();
 	if (stdout_tofile) {
@@ -261,17 +322,20 @@ int	main(int argc, char *argv[]) {
 	}
 
 	while (1) {
+		char *restrict	line;
+
 		fprintf(stderr, "$> ");
-		char	*line = cmd_readline();
-
-		if (!line)
+		if (!(line = cmd_readline())) {
 			continue ;
-		if (!strcmp(line, "q"))
-			break ;
+		}
 
-		g_cq_size = precalc_cq_size(line);
-		if (!(g_cq = calloc(g_cq_size + 1, sizeof(*g_cq))))
+		const size_t	cq_size = cq_precalc_size(line);
+		command_t	**cq = NULL;
+
+		if (!(cq = calloc(cq_size + 1, sizeof(*cq)))) {
 			continue ;
-		cmd_parseline(line);
+		}
+		cmd_parseline(line, cq);
+		cmd_run(cq_size, cq);
 	}
 }
