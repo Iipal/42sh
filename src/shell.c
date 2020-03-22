@@ -1,7 +1,7 @@
 #include "minishell.h"
 
 static inline __attribute__((nonnull(2)))
-	void cq_free(const size_t cq_length, command_t **cq) {
+	void cq_free(const size_t cq_length, struct command **cq) {
 	for (size_t i = 0; cq_length >= i && cq[i]; ++i) {
 		if (cq[i]->argv) {
 			for (int j = 0; cq[i]->argc >= j && cq[i]->argv[j]; j++)
@@ -22,7 +22,7 @@ static inline void	pipe_redir(int from, int to, int trash) {
 
 static void	cmd_pipe_queuing(const ssize_t isender,
 							const ssize_t ireceiver,
-							command_t *restrict *restrict cq) {
+							struct command *restrict *restrict cq) {
 	if (-1 >= isender)
 		return ;
 
@@ -177,12 +177,12 @@ static inline char	*line_prepare(const char *restrict line) {
 }
 
 static inline void	cmd_parseline(char *restrict line,
-					command_t *restrict *restrict cq) {
+					struct command *restrict *restrict cq) {
 	char	*cmd_line = line_prepare(line);
 	char	*save = NULL;
 	char *restrict	token = strtok_r(cmd_line, " |", &save);
 	size_t	cq_iter = 0;
-	command_t *restrict	c = NULL;
+	struct command *restrict	c = NULL;
 
 	while (token) {
 		if (!cq[cq_iter])
@@ -197,7 +197,7 @@ static inline void	cmd_parseline(char *restrict line,
 	free(cmd_line);
 }
 
-static inline void	cmd_solorun(const command_t *restrict cmd) {
+static inline void	cmd_solorun(const struct command *restrict cmd) {
 	if (!(child = fork())) {
 		DBG_INFO("child  | %d(%d) '%s'\n", getpid(), getppid(), cmd->argv[0]);
 		execvp(cmd->argv[0], cmd->argv);
@@ -214,31 +214,31 @@ static inline void	bunsupported(void) {
 		program_invocation_short_name);
 }
 
-static inline void	becho(const command_t *restrict cmd) {
+static inline void	becho(const struct command *restrict cmd) {
 	(void)cmd;
 	printf("builtin: echo\n");
 }
-static inline void	bcd(const command_t *restrict cmd) {
+static inline void	bcd(const struct command *restrict cmd) {
 	(void)cmd;
 	printf("builtin: cd\n");
 }
-static inline void	bsetenv(const command_t *restrict cmd) {
+static inline void	bsetenv(const struct command *restrict cmd) {
 	(void)cmd;
 	printf("builtin: setenv\n");
 }
-static inline void	bunsetenv(const command_t *restrict cmd) {
+static inline void	bunsetenv(const struct command *restrict cmd) {
 	(void)cmd;
 	printf("builtin: unsetenv\n");
 }
-static inline void	benv(const command_t *restrict cmd) {
+static inline void	benv(const struct command *restrict cmd) {
 	(void)cmd;
 	printf("builtin: env\n");
 }
-static inline void	bexit(const command_t *restrict cmd) {
+static inline void	bexit(const struct command *restrict cmd) {
 	(void)cmd;
 	exit(EXIT_SUCCESS);
 }
-static inline void	bhelp(const command_t *restrict cmd) {
+static inline void	bhelp(const struct command *restrict cmd) {
 	(void)cmd;
 	fprintf(stderr, "Builtins help information:\n"
 		"\techo: display a line of text\n"
@@ -252,8 +252,8 @@ static inline void	bhelp(const command_t *restrict cmd) {
 		program_invocation_short_name);
 }
 
-static inline bool	cmd_builtinrun(const command_t *restrict cmd) {
-	static void	(*cmd_fnptr_builtins[])(const command_t *restrict) = {
+static inline bool	cmd_builtinrun(const struct command *restrict cmd) {
+	static void	(*cmd_fnptr_builtins[])(const struct command *restrict) = {
 		becho, bcd, bsetenv, bunsetenv, benv, bexit, bhelp, NULL
 	};
 	static const char	*cmd_str_builtins[] = {
@@ -275,7 +275,7 @@ static inline bool	cmd_builtinrun(const command_t *restrict cmd) {
 }
 
 static inline void	cmd_run(const size_t cq_length,
-					command_t *restrict *restrict cq) {
+					struct command *restrict *restrict cq) {
 	for (size_t i = 0; cq_length > i; i++)
 		if (cmd_builtinrun(cq[i]))
 			return ;
@@ -306,7 +306,7 @@ int	main(int argc, char *argv[]) {
 		if (!(line = cmd_readline()))
 			continue ;
 
-		command_t	**cq;
+		struct command	**cq;
 		size_t	cq_length = cq_precalc_pipe_length(line);
 		assert(cq = calloc(cq_length + 1, sizeof(*cq)));
 		cmd_parseline(line, cq);

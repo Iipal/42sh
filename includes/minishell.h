@@ -22,15 +22,10 @@ static pid_t	child;
 
 # define EXEC_ERR_FMTMSG "'%s': command not found..."
 
-/*
-** ----------
-** command_t:
-** ----------
-*/
-typedef struct {
+struct command {
 	char	**argv;
 	int	argc;
-} command_t;
+};
 
 /*
 ** --------
