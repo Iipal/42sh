@@ -1,12 +1,11 @@
 #include "minishell.h"
 
 static inline __attribute__((nonnull(2)))
-	void cq_free(const size_t cq_size, command_t **cq) {
-	for (size_t i = 0; cq_size >= i && cq[i]; ++i) {
+	void cq_free(const size_t cq_length, command_t **cq) {
+	for (size_t i = 0; cq_length >= i && cq[i]; ++i) {
 		if (cq[i]->argv) {
-			for (int j = 0; cq[i]->argc >= j && cq[i]->argv[j]; j++) {
+			for (int j = 0; cq[i]->argc >= j && cq[i]->argv[j]; j++)
 				free(cq[i]->argv[j]);
-			}
 			free(cq[i]->argv);
 		}
 		free(cq[i]);
@@ -17,20 +16,17 @@ static inline __attribute__((nonnull(2)))
 static inline void	pipe_redir(int from, int to, int trash) {
 	dup2(from, to);
 	close(from);
-	if (trash != -1) {
+	if (trash != -1)
 		close(trash);
-	}
 }
 
 static void	cmd_pipe_queuing(const ssize_t isender,
 							const ssize_t ireceiver,
 							command_t *restrict *restrict cq) {
-	if (-1 >= isender) {
+	if (-1 >= isender)
 		return ;
-	}
 
 	int	fds[2] = { 0 };
-
 	assert(-1 != pipe(fds));
 	assert(-1 != (child = fork()));
 
@@ -56,14 +52,13 @@ static inline char	*cmd_readline(void) {
 	size_t	n = 0;
 	ssize_t	nb = getline(&out, &n, stdin);
 
-	if (!nb || !out) {
+	if (!nb || !out)
 		return NULL;
-	}
 	*((short*)(out + nb - 1)) = 0;
 	return out;
 }
 
-static inline size_t	cq_precalc_size(char *restrict line) {
+static inline size_t	cq_precalc_pipe_length(char *restrict line) {
 	size_t	n = 1;
 	char	*l = strchr(line, '|');
 
@@ -80,20 +75,18 @@ static inline size_t	cq_precalc_size(char *restrict line) {
 static inline void	add_redir_tofile(const char *path) {
 	int	fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0666);
 
-	if (-1 == fd) {
+	if (-1 == fd)
 		err(EXIT_FAILURE, "open(%s)", path);
-	}
 	dup2(fd, STDOUT_FILENO);
 	close(fd);
 }
 
 static void	wait_child(int s) {
 	DBG_INFO("wait   | %d\n", child);
-	if (1 > child) {
+	if (1 > child)
 		wait(&s);
-	} else {
+	else
 		waitpid(child, &s, WUNTRACED | WNOHANG);
-	}
 }
 
 static inline void	init_sigchld_handler(void) {
@@ -102,9 +95,8 @@ static inline void	init_sigchld_handler(void) {
 	sa.sa_flags = SA_RESTART | SA_NODEFER;
 	sa.sa_handler = wait_child;
 
-	if (-1 == sigaction(SIGCHLD, &sa, NULL)) {
+	if (-1 == sigaction(SIGCHLD, &sa, NULL))
 		err(EXIT_FAILURE, "sigaction");
-	}
 }
 
 static inline void	parse_opt(int ac, char *const *av) {
@@ -129,25 +121,20 @@ static char	*line_trim_extra_ws(const char *restrict src) {
 	size_t	start = 0;
 	size_t	end = strlen(src);
 
-	while (src[start] && isspace(src[start])) {
+	while (src[start] && isspace(src[start]))
 		++start;
-	}
-	while (start < end && isspace(src[end - 1])) {
+	while (start < end && isspace(src[end - 1]))
 		--end;
-	}
-	if (!src[start] || start == end) {
+	if (!src[start] || start == end)
 		return NULL;
-	}
 
 	char	*out = NULL;
 	char	*acopy = strndupa(src + start, end - start);
 
 	size_t	n = 1;
-	for (size_t i = 1; acopy[i]; ++i) {
-		if (!isspace(acopy[i]) || !isspace(acopy[i - 1])) {
+	for (size_t i = 1; acopy[i]; ++i)
+		if (!isspace(acopy[i]) || !isspace(acopy[i - 1]))
 			acopy[n++] = acopy[i];
-		}
-	}
 	acopy[n] = '\0';
 	assert(out = strndup(acopy, n));
 	return out;
@@ -198,16 +185,13 @@ static inline void	cmd_parseline(char *restrict line,
 	command_t *restrict	c = NULL;
 
 	while (token) {
-		if (!cq[cq_iter]) {
-			assert(cq[cq_iter] = calloc(1, sizeof(**cq)));
-			c = cq[cq_iter];
-		}
+		if (!cq[cq_iter])
+			assert(c = cq[cq_iter] = calloc(1, sizeof(*c)));
 		assert(c->argv = realloc(c->argv, sizeof(*(c->argv)) * (c->argc + 2)));
 		assert(c->argv[c->argc++] = strdup(token));
 		c->argv[c->argc] = NULL;
-		if ('|' == *save) {
+		if ('|' == *save)
 			++cq_iter;
-		}
 		token = strtok_r(NULL, " |", &save);
 	}
 	free(cmd_line);
@@ -277,36 +261,30 @@ static inline bool	cmd_builtinrun(const command_t *restrict cmd) {
 	};
 
 	size_t	i;
-	for (i = 0; cmd_str_builtins[i]; i++) {
-		if (!strcmp(cmd->argv[0], cmd_str_builtins[i])) {
+	for (i = 0; cmd_str_builtins[i]; i++)
+		if (!strcmp(cmd->argv[0], cmd_str_builtins[i]))
 			break ;
-		}
-	}
 	if (cmd_str_builtins[i]) {
-		if (is_pipe) {
+		if (is_pipe)
 			bunsupported();
-		} else {
+		else
 			cmd_fnptr_builtins[i](cmd);
-		}
 		return true;
 	}
 	return false;
 }
 
-static inline void	cmd_run(const size_t cq_size,
+static inline void	cmd_run(const size_t cq_length,
 					command_t *restrict *restrict cq) {
-	for (size_t i = 0; cq_size > i; i++) {
-		if (cmd_builtinrun(cq[i])) {
+	for (size_t i = 0; cq_length > i; i++)
+		if (cmd_builtinrun(cq[i]))
 			return ;
-		}
-	}
 
-	if (1 < cq_size) {
-		if (!(child = fork())) {
-			cmd_pipe_queuing(cq_size - 2, cq_size - 1, cq);
-		} else if (0 < child) {
+	if (1 < cq_length) {
+		if (!(child = fork()))
+			cmd_pipe_queuing(cq_length - 2, cq_length - 1, cq);
+		else if (0 < child)
 			pause();
-		}
 	} else {
 		cmd_solorun(cq[0]);
 	}
@@ -316,9 +294,8 @@ int	main(int argc, char *argv[]) {
 	parse_opt(argc, argv);
 
 	init_sigchld_handler();
-	if (stdout_tofile) {
+	if (stdout_tofile)
 		add_redir_tofile("./result.out");
-	}
 
 	while (1) {
 		char *restrict	line = NULL;
@@ -326,16 +303,15 @@ int	main(int argc, char *argv[]) {
 
 		DBG_INFO("%d(%d) ", getpid(), getppid());
 		fprintf(stderr, "$> ");
-		if (!(line = cmd_readline())) {
+		if (!(line = cmd_readline()))
 			continue ;
-		}
 
 		command_t	**cq;
-		size_t	cq_size = cq_precalc_size(line);
-		assert(cq = calloc(cq_size + 1, sizeof(*cq)));
+		size_t	cq_length = cq_precalc_pipe_length(line);
+		assert(cq = calloc(cq_length + 1, sizeof(*cq)));
 		cmd_parseline(line, cq);
-		cmd_run(cq_size, cq);
-		cq_free(cq_size, cq);
+		cmd_run(cq_length, cq);
+		cq_free(cq_length, cq);
 		free(line);
 	}
 }
