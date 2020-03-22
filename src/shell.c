@@ -129,7 +129,7 @@ static char	*line_trim_extra_ws(const char *restrict src) {
 	size_t	start = 0;
 	size_t	end = strlen(src);
 
-	while (src[start] && isspace(start)) {
+	while (src[start] && isspace(src[start])) {
 		++start;
 	}
 	while (start < end && isspace(src[end - 1])) {
@@ -139,17 +139,16 @@ static char	*line_trim_extra_ws(const char *restrict src) {
 		return NULL;
 	}
 
+	char	*out = NULL;
 	char	*acopy = strndupa(src + start, end - start);
 
-	size_t	n = 0;
-	for (size_t i = 0; end > i && acopy[i]; ++i) {
-		if (!isspace(acopy[i]) || (0 < i && !isspace(acopy[i - 1]))) {
+	size_t	n = 1;
+	for (size_t i = 1; acopy[i]; ++i) {
+		if (!isspace(acopy[i]) || !isspace(acopy[i - 1])) {
 			acopy[n++] = acopy[i];
 		}
 	}
-	acopy[n] = 0;
-
-	char	*out;
+	acopy[n] = '\0';
 	assert(out = strndup(acopy, n));
 	return out;
 }
@@ -253,7 +252,7 @@ static inline void	benv(const command_t *restrict cmd) {
 }
 static inline void	bexit(const command_t *restrict cmd) {
 	(void)cmd;
-	_Exit(EXIT_SUCCESS);
+	exit(EXIT_SUCCESS);
 }
 static inline void	bhelp(const command_t *restrict cmd) {
 	(void)cmd;
