@@ -1,5 +1,19 @@
 #include "minishell.h"
 
+static inline __attribute__((nonnull(2)))
+	void cq_free(const size_t cq_size, command_t **cq) {
+	for (size_t i = 0; cq_size >= i && cq[i]; ++i) {
+		if (cq[i]->argv) {
+			for (int j = 0; cq[i]->argc >= j && cq[i]->argv[j]; j++) {
+				free(cq[i]->argv[j]);
+			}
+			free(cq[i]->argv);
+		}
+		free(cq[i]);
+	}
+	free(cq);
+}
+
 static inline void	pipe_redir(int from, int to, int trash) {
 	dup2(from, to);
 	close(from);
@@ -26,14 +40,14 @@ static void	cmd_pipe_queuing(const ssize_t isender,
 		DBG_INFO("child  | %d(%d) '%s' created\n",
 			getpid(), getppid(), cq[isender]->argv[0]);
 		execvp(cq[isender]->argv[0], cq[isender]->argv);
-		err(EXIT_FAILURE, EXEC_ERR_FMTMSG, cq[isender]->argv[0]);
+		errx(EXIT_FAILURE, EXEC_ERR_FMTMSG, cq[isender]->argv[0]);
 	} else if (0 < child) {
 		DBG_INFO("child  | %d(%d) '%s' wait for input from '%s'\n",
 			getpid(), getppid(),
 			cq[ireceiver]->argv[0], cq[isender]->argv[0]);
 		pipe_redir(fds[0], STDIN_FILENO, fds[1]);
 		execvp(cq[ireceiver]->argv[0], cq[ireceiver]->argv);
-		err(EXIT_FAILURE, EXEC_ERR_FMTMSG, cq[ireceiver]->argv[0]);
+		errx(EXIT_FAILURE, EXEC_ERR_FMTMSG, cq[ireceiver]->argv[0]);
 	}
 }
 
@@ -53,40 +67,14 @@ static inline size_t	cq_precalc_size(char *restrict line) {
 	size_t	n = 1;
 	char	*l = strchr(line, '|');
 
-	while (l) {
-		l = strchr(l + 1, '|');
-		++n;
+	if (l) {
+		is_pipe = 1;
+		do {
+			l = strchr(l + 1, '|');
+			++n;
+		} while (l);
 	}
 	return n;
-}
-
-static char	*line_trim_extra_ws(const char *restrict src) {
-	char	*acopy = NULL;
-	size_t	start = 0;
-	size_t	end = strlen(src);
-
-	assert(acopy = strdupa(src));
-	while (acopy[start] && isspace(start)) {
-		++start;
-	}
-	while (start < end && isspace(acopy[end - 1])) {
-		--end;
-	}
-	if (!acopy[start] || start == end) {
-		return NULL;
-	}
-
-	size_t	n = 0;
-	for (size_t i = start; end > i && acopy[i]; ++i) {
-		if (!isspace(acopy[i]) || (0 < i && !isspace(acopy[i - 1]))) {
-			acopy[n++] = acopy[i];
-		}
-	}
-	acopy[n] = 0;
-
-	char	*out;
-	assert(out = strndup(acopy, n));
-	return out;
 }
 
 static inline void	add_redir_tofile(const char *path) {
@@ -137,6 +125,35 @@ static inline void	parse_opt(int ac, char *const *av) {
 	}
 }
 
+static char	*line_trim_extra_ws(const char *restrict src) {
+	size_t	start = 0;
+	size_t	end = strlen(src);
+
+	while (src[start] && isspace(start)) {
+		++start;
+	}
+	while (start < end && isspace(src[end - 1])) {
+		--end;
+	}
+	if (!src[start] || start == end) {
+		return NULL;
+	}
+
+	char	*acopy = strndupa(src + start, end - start);
+
+	size_t	n = 0;
+	for (size_t i = 0; end > i && acopy[i]; ++i) {
+		if (!isspace(acopy[i]) || (0 < i && !isspace(acopy[i - 1]))) {
+			acopy[n++] = acopy[i];
+		}
+	}
+	acopy[n] = 0;
+
+	char	*out;
+	assert(out = strndup(acopy, n));
+	return out;
+}
+
 static char	*line_put_sep_space(const char *restrict str, int sep) {
 	char	*out;
 	char	*sep_ptr = strchr(str, sep);
@@ -162,37 +179,46 @@ static char	*line_put_sep_space(const char *restrict str, int sep) {
 	return out;
 }
 
+static inline char	*line_prepare(const char *restrict line) {
+	char *restrict	line_no_ws = line_trim_extra_ws(line);
+	char *restrict	line_seps = line_put_sep_space(line_no_ws, '|');
+
+	DBG_INFO("line transformation:\n -> '%s'\n -> '%s'\n -> '%s'\n",
+		line, line_no_ws, line_seps);
+
+	free(line_no_ws);
+	return line_seps;
+}
+
 static inline void	cmd_parseline(char *restrict line,
 					command_t *restrict *restrict cq) {
-	char	*tmp = line_trim_extra_ws(line);
-	char	*sep_line = line_put_sep_space(tmp, '|');
-
+	char	*cmd_line = line_prepare(line);
 	char	*save = NULL;
-	char	*token = strtok_r(sep_line, " |", &save);
+	char *restrict	token = strtok_r(cmd_line, " |", &save);
 	size_t	cq_iter = 0;
+	command_t *restrict	c = NULL;
 
 	while (token) {
 		if (!cq[cq_iter]) {
 			assert(cq[cq_iter] = calloc(1, sizeof(**cq)));
+			c = cq[cq_iter];
 		}
-		assert(cq[cq_iter]->argv = realloc(cq[cq_iter]->argv,
-			sizeof(*(cq[cq_iter]->argv)) * (cq[cq_iter]->argc + 2)));
-		assert(cq[cq_iter]->argv[cq[cq_iter]->argc++] = strdup(token));
-		cq[cq_iter]->argv[cq[cq_iter]->argc] = NULL;
+		assert(c->argv = realloc(c->argv, sizeof(*(c->argv)) * (c->argc + 2)));
+		assert(c->argv[c->argc++] = strdup(token));
+		c->argv[c->argc] = NULL;
 		if ('|' == *save) {
 			++cq_iter;
 		}
 		token = strtok_r(NULL, " |", &save);
 	}
-	free(tmp);
-	free(sep_line);
+	free(cmd_line);
 }
 
 static inline void	cmd_solorun(const command_t *restrict cmd) {
 	if (!(child = fork())) {
 		DBG_INFO("child  | %d(%d) '%s'\n", getpid(), getppid(), cmd->argv[0]);
 		execvp(cmd->argv[0], cmd->argv);
-		err(EXIT_FAILURE, EXEC_ERR_FMTMSG, cmd->argv[0]);
+		errx(EXIT_FAILURE, EXEC_ERR_FMTMSG, cmd->argv[0]);
 	} else {
 		DBG_INFO("parent | %d(%d)\n", getpid(), getppid());
 		pause();
@@ -251,11 +277,6 @@ static inline bool	cmd_builtinrun(const command_t *restrict cmd) {
 		"echo", "cd", "setenv", "unsetenv", "env", "exit", "help", NULL
 	};
 
-	if (is_pipe) {
-		bunsupported();
-		return true;
-	}
-
 	size_t	i;
 	for (i = 0; cmd_str_builtins[i]; i++) {
 		if (!strcmp(cmd->argv[0], cmd_str_builtins[i])) {
@@ -263,7 +284,11 @@ static inline bool	cmd_builtinrun(const command_t *restrict cmd) {
 		}
 	}
 	if (cmd_str_builtins[i]) {
-		cmd_fnptr_builtins[i](cmd);
+		if (is_pipe) {
+			bunsupported();
+		} else {
+			cmd_fnptr_builtins[i](cmd);
+		}
 		return true;
 	}
 	return false;
@@ -271,8 +296,10 @@ static inline bool	cmd_builtinrun(const command_t *restrict cmd) {
 
 static inline void	cmd_run(const size_t cq_size,
 					command_t *restrict *restrict cq) {
-	if (cmd_builtinrun(cq[0])) {
-		return ;
+	for (size_t i = 0; cq_size > i; i++) {
+		if (cmd_builtinrun(cq[i])) {
+			return ;
+		}
 	}
 
 	if (1 < cq_size) {
@@ -289,17 +316,16 @@ static inline void	cmd_run(const size_t cq_size,
 int	main(int argc, char *argv[]) {
 	parse_opt(argc, argv);
 
-	DBG_INFO("pid   : %d(%d)\n", getpid(), getppid());
-
 	init_sigchld_handler();
 	if (stdout_tofile) {
 		add_redir_tofile("./result.out");
 	}
 
 	while (1) {
-		char *restrict	line;
+		char *restrict	line = NULL;
 		is_pipe = 0;
 
+		DBG_INFO("%d(%d) ", getpid(), getppid());
 		fprintf(stderr, "$> ");
 		if (!(line = cmd_readline())) {
 			continue ;
@@ -307,11 +333,10 @@ int	main(int argc, char *argv[]) {
 
 		command_t	**cq;
 		size_t	cq_size = cq_precalc_size(line);
-		if (1 < cq_size) {
-			is_pipe = 1;
-		}
 		assert(cq = calloc(cq_size + 1, sizeof(*cq)));
 		cmd_parseline(line, cq);
 		cmd_run(cq_size, cq);
+		cq_free(cq_size, cq);
+		free(line);
 	}
 }

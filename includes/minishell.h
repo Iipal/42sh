@@ -20,7 +20,7 @@
 
 static pid_t	child;
 
-# define EXEC_ERR_FMTMSG "can not run '%s'"
+# define EXEC_ERR_FMTMSG "'%s': command not found..."
 
 /*
 ** ----------
