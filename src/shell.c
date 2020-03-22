@@ -199,50 +199,79 @@ static inline void	cmd_solorun(const command_t *restrict cmd) {
 	}
 }
 
-static inline void	becho(void) {
-	printf("builtin: echo\n");
-}
-static inline void	bcd(void) {
-	printf("builtin: cd\n");
-}
-static inline void	bsetenv(void) {
-	printf("builtin: setenv\n");
-}
-static inline void	bunsetenv(void) {
-	printf("builtin: unsetenv\n");
-}
-static inline void	benv(void) {
-	printf("builtin: env\n");
-}
-static inline void	bexit(void) {
-	_Exit(EXIT_SUCCESS);
+static inline void	bunsupported(void) {
+	fprintf(stderr, "%s: builtins do not work with pipes or re-directions\n"
+					"\tType 'help' for more information.\n",
+		program_invocation_short_name);
 }
 
-static inline bool	cmd_builtinrun(const char *restrict command) {
-	static void	(*cmd_fnptr_builtins[])(void) = {
-		becho, bcd, bsetenv, bunsetenv, benv, bexit, NULL
+static inline void	becho(const command_t *restrict cmd) {
+	(void)cmd;
+	printf("builtin: echo\n");
+}
+static inline void	bcd(const command_t *restrict cmd) {
+	(void)cmd;
+	printf("builtin: cd\n");
+}
+static inline void	bsetenv(const command_t *restrict cmd) {
+	(void)cmd;
+	printf("builtin: setenv\n");
+}
+static inline void	bunsetenv(const command_t *restrict cmd) {
+	(void)cmd;
+	printf("builtin: unsetenv\n");
+}
+static inline void	benv(const command_t *restrict cmd) {
+	(void)cmd;
+	printf("builtin: env\n");
+}
+static inline void	bexit(const command_t *restrict cmd) {
+	(void)cmd;
+	_Exit(EXIT_SUCCESS);
+}
+static inline void	bhelp(const command_t *restrict cmd) {
+	(void)cmd;
+	fprintf(stderr, "Builtins help information:\n"
+		"\techo: display a line of text\n"
+		"\tcd: change the current directory\n"
+		"\tsetenv: add the variable to the environment\n"
+		"\tunsetenv: delete the variable from the environment\n"
+		"\tenv: run a program in modified environment\n"
+		"\texit: exit from '%s'\n"
+		"\thelp: print this info message\n"
+		"\n(!!!) No pipes or re-directions do not work for builtin commands\n",
+		program_invocation_short_name);
+}
+
+static inline bool	cmd_builtinrun(const command_t *restrict cmd) {
+	static void	(*cmd_fnptr_builtins[])(const command_t *restrict) = {
+		becho, bcd, bsetenv, bunsetenv, benv, bexit, bhelp, NULL
 	};
 	static const char	*cmd_str_builtins[] = {
-		"echo", "cd", "setenv", "unsetenv", "env", "exit", NULL
+		"echo", "cd", "setenv", "unsetenv", "env", "exit", "help", NULL
 	};
+
+	if (is_pipe) {
+		bunsupported();
+		return true;
+	}
 
 	size_t	i;
 	for (i = 0; cmd_str_builtins[i]; i++) {
-		if (!strcmp(command, cmd_str_builtins[i])) {
+		if (!strcmp(cmd->argv[0], cmd_str_builtins[i])) {
 			break ;
 		}
 	}
-
 	if (cmd_str_builtins[i]) {
-		cmd_fnptr_builtins[i]();
+		cmd_fnptr_builtins[i](cmd);
 		return true;
 	}
 	return false;
 }
 
 static inline void	cmd_run(const size_t cq_size,
-		command_t *restrict *restrict cq) {
-	if (cmd_builtinrun(cq[0]->argv[0])) {
+					command_t *restrict *restrict cq) {
+	if (cmd_builtinrun(cq[0])) {
 		return ;
 	}
 
@@ -269,6 +298,7 @@ int	main(int argc, char *argv[]) {
 
 	while (1) {
 		char *restrict	line;
+		is_pipe = 0;
 
 		fprintf(stderr, "$> ");
 		if (!(line = cmd_readline())) {
@@ -277,6 +307,9 @@ int	main(int argc, char *argv[]) {
 
 		command_t	**cq;
 		size_t	cq_size = cq_precalc_size(line);
+		if (1 < cq_size) {
+			is_pipe = 1;
+		}
 		assert(cq = calloc(cq_size + 1, sizeof(*cq)));
 		cmd_parseline(line, cq);
 		cmd_run(cq_size, cq);

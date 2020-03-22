@@ -33,13 +33,20 @@ typedef struct {
 } command_t;
 
 /*
-** ----------------
-** flags \ options:
-** ----------------
+** --------
+** options:
+** --------
 */
 
 static int	dbg_level = 0;
 static int	stdout_tofile = 0;
+
+/*
+** ------
+** flags:
+** ------
+*/
+static int	is_pipe = 0;
 
 /*
 ** -----------------
