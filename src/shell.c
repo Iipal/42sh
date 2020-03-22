@@ -169,8 +169,7 @@ static inline char	*line_prepare(const char *restrict line) {
 	char *restrict	line_no_ws = line_trim_extra_ws(line);
 	char *restrict	line_seps = line_put_sep_space(line_no_ws, '|');
 
-	DBG_INFO("line transformation:\n -> '%s'\n -> '%s'\n -> '%s'\n",
-		line, line_no_ws, line_seps);
+	DBG_INFO(" '%s' -> '%s'\n", line, line_seps);
 
 	free(line_no_ws);
 	return line_seps;
@@ -209,8 +208,8 @@ static inline void	cmd_solorun(const struct command *restrict cmd) {
 }
 
 static inline void	bunsupported(void) {
-	fprintf(stderr, "%s: builtins do not work with pipes or re-directions\n"
-					"\tType 'help' for more information.\n",
+	errx(EXIT_SUCCESS, "%s: builtins do not work with pipes or re-directions\n"
+		"\tType 'help' for more information.\n",
 		program_invocation_short_name);
 }
 
@@ -296,13 +295,14 @@ int	main(int argc, char *argv[]) {
 	init_sigchld_handler();
 	if (stdout_tofile)
 		add_redir_tofile("./result.out");
+	setbuf(stdout, NULL);
 
 	while (1) {
 		char *restrict	line = NULL;
 		is_pipe = 0;
 
 		DBG_INFO("%d(%d) ", getpid(), getppid());
-		fprintf(stderr, "$> ");
+		printf("$> ");
 		if (!(line = cmd_readline()))
 			continue ;
 
