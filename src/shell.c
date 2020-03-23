@@ -52,7 +52,7 @@ static inline char	*cmd_readline(void) {
 	size_t	n = 0;
 	ssize_t	nb = getline(&out, &n, stdin);
 
-	if (!nb || !out)
+	if (!nb || !out || -1 == nb)
 		return NULL;
 	*((short*)(out + nb - 1)) = 0;
 	return out;
@@ -117,7 +117,7 @@ static inline void	parse_opt(int ac, char *const *av) {
 	}
 }
 
-static char	*line_trim_extra_ws(const char *restrict src) {
+static char	*line_ws_trimm(const char *restrict src) {
 	size_t	start = 0;
 	size_t	end = strlen(src);
 
@@ -140,24 +140,18 @@ static char	*line_trim_extra_ws(const char *restrict src) {
 	return out;
 }
 
-static char	*line_put_sep_space(const char *restrict str, int sep) {
-	char	*out;
-	char	*sep_ptr = strchr(str, sep);
+static char	*line_space_sep(const char *restrict str, int sep) {
+	char *restrict	out;
+	char *restrict	sep_ptr;
 
 	assert(out = strdup(str));
+	sep_ptr = strchr(str, sep);
 	while (sep_ptr) {
-		size_t	sep_len = 0;
 		if (sep_ptr > str && !isspace(sep_ptr[-1])) {
-			sep_len = strstr(out, sep_ptr) - out;
-			assert(out = realloc(out, strlen(out) + 2));
-			out[sep_len++] = ' ';
-			out[sep_len++] = sep;
-			strcpy(out + sep_len, sep_ptr + 1);
-		}
-		if (!isspace(sep_ptr[1])) {
-			sep_len = strstr(out, sep_ptr) - out + 1;
+			ptrdiff_t	sep_len = strstr(out, sep_ptr) - out;
 			assert(out = realloc(out, strlen(out) + 1));
 			out[sep_len++] = ' ';
+			out[sep_len++] = sep;
 			strcpy(out + sep_len, sep_ptr + 1);
 		}
 		sep_ptr = strchr(sep_ptr + 1, sep);
@@ -166,23 +160,28 @@ static char	*line_put_sep_space(const char *restrict str, int sep) {
 }
 
 static inline char	*line_prepare(const char *restrict line) {
-	char *restrict	line_no_ws = line_trim_extra_ws(line);
-	char *restrict	line_seps = line_put_sep_space(line_no_ws, '|');
+	char *restrict	line_no_ws;
+	char *restrict	line_seps;
 
-	DBG_INFO(" '%s' -> '%s'\n", line, line_seps);
+	if (!(line_no_ws = line_ws_trimm(line)))
+		return NULL;
+	line_seps = line_space_sep(line_no_ws, '|');
 
 	free(line_no_ws);
 	return line_seps;
 }
 
-static inline void	cmd_parseline(char *restrict line,
+static inline bool	cmd_parseline(char *restrict line,
 					struct command *restrict *restrict cq) {
-	char	*cmd_line = line_prepare(line);
-	char	*save = NULL;
-	char *restrict	token = strtok_r(cmd_line, " |", &save);
-	size_t	cq_iter = 0;
 	struct command *restrict	c = NULL;
+	size_t	cq_iter = 0;
+	char	*save = NULL;
+	char	*token = NULL;
+	char	*cmd_line = NULL;
 
+	if (!(cmd_line = line_prepare(line)))
+		return false;
+	token = strtok_r(cmd_line, " |", &save);
 	while (token) {
 		if (!cq[cq_iter])
 			assert(c = cq[cq_iter] = calloc(1, sizeof(*c)));
@@ -194,17 +193,7 @@ static inline void	cmd_parseline(char *restrict line,
 		token = strtok_r(NULL, " |", &save);
 	}
 	free(cmd_line);
-}
-
-static inline void	cmd_solorun(const struct command *restrict cmd) {
-	if (!(child = fork())) {
-		DBG_INFO("child  | %d(%d) '%s'\n", getpid(), getppid(), cmd->argv[0]);
-		execvp(cmd->argv[0], cmd->argv);
-		errx(EXIT_FAILURE, EXEC_ERR_FMTMSG, cmd->argv[0]);
-	} else {
-		DBG_INFO("parent | %d(%d)\n", getpid(), getppid());
-		pause();
-	}
+	return true;
 }
 
 static inline void	bunsupported(void) {
@@ -239,7 +228,7 @@ static inline void	bexit(const struct command *restrict cmd) {
 }
 static inline void	bhelp(const struct command *restrict cmd) {
 	(void)cmd;
-	fprintf(stderr, "Builtins help information:\n"
+	printf("Builtins help:\n"
 		"\techo: display a line of text\n"
 		"\tcd: change the current directory\n"
 		"\tsetenv: add the variable to the environment\n"
@@ -271,6 +260,17 @@ static inline bool	cmd_builtinrun(const struct command *restrict cmd) {
 		return true;
 	}
 	return false;
+}
+
+static inline void	cmd_solorun(const struct command *restrict cmd) {
+	if (!(child = fork())) {
+		DBG_INFO("child  | %d(%d) '%s'\n", getpid(), getppid(), cmd->argv[0]);
+		execvp(cmd->argv[0], cmd->argv);
+		errx(EXIT_FAILURE, EXEC_ERR_FMTMSG, cmd->argv[0]);
+	} else {
+		DBG_INFO("parent | %d(%d)\n", getpid(), getppid());
+		pause();
+	}
 }
 
 static inline void	cmd_run(const size_t cq_length,
@@ -309,7 +309,8 @@ int	main(int argc, char *argv[]) {
 		struct command	**cq;
 		size_t	cq_length = cq_precalc_pipe_length(line);
 		assert(cq = calloc(cq_length + 1, sizeof(*cq)));
-		cmd_parseline(line, cq);
+		if (!cmd_parseline(line, cq))
+			continue ;
 		cmd_run(cq_length, cq);
 		cq_free(cq_length, cq);
 		free(line);

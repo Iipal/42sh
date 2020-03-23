@@ -4,19 +4,22 @@
 #define _GNU_SOURCE
 
 #include <stdbool.h>
+#include <stdarg.h>
 #include <stdlib.h>
+#include <stddef.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
+#include <getopt.h>
 #include <assert.h>
+#include <errno.h>
 #include <err.h>
 #include <ctype.h>
+#include <unistd.h>
 #include <fcntl.h>
 #include <signal.h>
 #include <sys/wait.h>
-#include <errno.h>
-#include <stdarg.h>
-#include <getopt.h>
+#include <sys/types.h>
 
 static pid_t	child;
 
