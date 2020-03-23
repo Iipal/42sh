@@ -16,29 +16,28 @@ static inline __attribute__((nonnull(2)))
 static inline void	pipe_redir(int from, int to, int trash) {
 	dup2(from, to);
 	close(from);
-	if (trash != -1)
-		close(trash);
+	close(trash);
 }
 
 static void	cmd_pipe_queuing(const ssize_t isender,
-							const ssize_t ireceiver,
-							struct command *restrict *restrict cq) {
+				const ssize_t ireceiver,
+				struct command *restrict *restrict cq) {
 	if (-1 >= isender)
 		return ;
 
-	int	fds[2] = { 0 };
+	int	fds[2] = { 0, 0 };
 	assert(-1 != pipe(fds));
 	assert(-1 != (child = fork()));
 
 	if (!child) {
 		pipe_redir(fds[1], STDOUT_FILENO, fds[0]);
 		cmd_pipe_queuing(isender - 1, isender, cq);
-		DBG_INFO("child  | %d(%d) '%s' created\n",
+		DBG_INFO("child  | %d(%d) %s created\n",
 			getpid(), getppid(), cq[isender]->argv[0]);
 		execvp(cq[isender]->argv[0], cq[isender]->argv);
 		errx(EXIT_FAILURE, EXEC_ERR_FMTMSG, cq[isender]->argv[0]);
 	} else if (0 < child) {
-		DBG_INFO("child  | %d(%d) '%s' wait for input from '%s'\n",
+		DBG_INFO("child  | %d(%d) %s wait for input from %s\n",
 			getpid(), getppid(),
 			cq[ireceiver]->argv[0], cq[isender]->argv[0]);
 		pipe_redir(fds[0], STDIN_FILENO, fds[1]);
@@ -266,13 +265,16 @@ static inline bool	cmd_builtinrun(const struct command *restrict cmd) {
 }
 
 static inline void	cmd_solorun(const struct command *restrict cmd) {
-	if (!(child = fork())) {
-		DBG_INFO("child  | %d(%d) '%s'\n", getpid(), getppid(), cmd->argv[0]);
-		execvp(cmd->argv[0], cmd->argv);
-		errx(EXIT_FAILURE, EXEC_ERR_FMTMSG, cmd->argv[0]);
-	} else {
-		DBG_INFO("parent | %d(%d)\n", getpid(), getppid());
-		pause();
+	child = vfork();
+	switch (child) {
+		case  0:
+			DBG_INFO("child  | %d(%d) %s\n",
+				getpid(), getppid(), cmd->argv[0]);
+			execvp(cmd->argv[0], cmd->argv);
+		case -1:
+			err(EXIT_FAILURE, EXEC_ERR_FMTMSG, cmd->argv[0]);
+			break ;
+		default: pause(); break ;
 	}
 }
 
@@ -282,6 +284,7 @@ static inline void	cmd_run(const size_t cq_length,
 		if (cmd_builtinrun(cq[i]))
 			return ;
 
+	DBG_INFO("parent | %d(%d)\n", getpid(), getppid());
 	if (1 < cq_length) {
 		if (!(child = fork()))
 			cmd_pipe_queuing(cq_length - 2, cq_length - 1, cq);
@@ -304,7 +307,6 @@ int	main(int argc, char *argv[]) {
 		char *restrict	line = NULL;
 		is_pipe = 0;
 
-		DBG_INFO("%d(%d) ", getpid(), getppid());
 		printf("$> ");
 		if (!(line = cmd_readline()))
 			continue ;
