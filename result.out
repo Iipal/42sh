@@ -1,0 +1,25 @@
+$> configs
+includes
+libs
+Makefile
+minishell
+README.md
+result.out
+src
+test
+$> total 84
+drwxr-xr-x. 9 ipaldesse ipaldesse  4096 Mar 23 23:07 .
+drwxr-xr-x. 7 ipaldesse ipaldesse  4096 Mar 22 16:07 ..
+drwxr-xr-x. 3 ipaldesse ipaldesse  4096 Mar 21 14:20 configs
+drwxr-xr-x. 8 ipaldesse ipaldesse  4096 Mar 23 22:50 .git
+-rw-r--r--. 1 ipaldesse ipaldesse    77 Mar 21 15:29 .gitignore
+drwxr-xr-x. 2 ipaldesse ipaldesse  4096 Mar 21 18:24 includes
+drwxr-xr-x. 2 ipaldesse ipaldesse  4096 Mar 21 15:29 libs
+-rw-r--r--. 1 ipaldesse ipaldesse   926 Mar 21 15:29 Makefile
+-rwxr-xr-x. 1 ipaldesse ipaldesse 31192 Mar 23 23:07 minishell
+-rw-r--r--. 1 ipaldesse ipaldesse   203 Mar 23 19:11 README.md
+-rw-r--r--. 1 ipaldesse ipaldesse    77 Mar 23 23:07 result.out
+drwxr-xr-x. 2 ipaldesse ipaldesse  4096 Mar 23 23:07 src
+drwxr-xr-x. 2 ipaldesse ipaldesse  4096 Mar 23 10:40 test
+drwxr-xr-x. 2 ipaldesse ipaldesse  4096 Mar 21 19:18 .vscode
+$> 

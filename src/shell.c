@@ -55,9 +55,10 @@ static inline char	*cmd_readline(void) {
 	size_t	n = 0;
 	ssize_t	nb = getline(&out, &n, stdin);
 
-	if (!nb || !out || -1 == nb)
-		return NULL;
-	*((short*)(out + nb - 1)) = 0;
+	if (1 > nb)
+		return (char*)-1;
+	if (out)
+		*((short*)(out + nb - 1)) = 0;
 	return out;
 }
 
@@ -288,11 +289,16 @@ int	main(int argc, char *argv[]) {
 	setbuf(stdout, NULL);
 
 	while (1) {
-		char *restrict	line = NULL;
+		char *restrict	line;
+		printf("$> ");
 		is_pipe = 0;
 
-		printf("$> ");
-		if (!(line = cmd_readline()))
+		if ((char*)-1 == (line = cmd_readline())) {
+			rewind(stdin);
+			puts("");
+			continue ;
+		}
+		if (!line)
 			continue ;
 
 		struct command	**cq;
