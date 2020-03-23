@@ -207,8 +207,11 @@ static inline void	becho(const struct command *restrict cmd) {
 	printf("builtin: echo\n");
 }
 static inline void	bcd(const struct command *restrict cmd) {
-	(void)cmd;
-	printf("builtin: cd\n");
+	if (2 == cmd->argc && -1 == chdir(cmd->argv[1])) {
+		fprintf(stderr, "cd: %m: %s\n", cmd->argv[1]);
+	} else {
+		fprintf(stderr, "cd: too many arguments\n");
+	}
 }
 static inline void	bsetenv(const struct command *restrict cmd) {
 	(void)cmd;
