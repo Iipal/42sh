@@ -10,17 +10,17 @@ static void	sigchld_handler(int sig) {
 		waitpid(child, &dummy, WUNTRACED | WNOHANG);
 }
 
-static inline void	sig_set_handler(int __sig, int __flags, sighandler_t __h) {
+static inline void	sig_set_handler(int __sig, sighandler_t __handler) {
 	struct sigaction	sa;
 	bzero(&sa, sizeof(sa));
 
-	sa.sa_flags = __flags;
-	sa.sa_handler = __h;
+	sa.sa_flags = SA_RESTART | SA_NODEFER;
+	sa.sa_handler = __handler;
 
 	if (-1 == sigaction(__sig, &sa, NULL))
 		err(EXIT_FAILURE, "sigaction");
 }
 
 void	init_sig_handlers(void) {
-	sig_set_handler(SIGCHLD, SA_RESTART | SA_NODEFER, sigchld_handler);
+	sig_set_handler(SIGCHLD, sigchld_handler);
 }
