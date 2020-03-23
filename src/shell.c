@@ -1,5 +1,9 @@
 #include "minishell.h"
 
+int	dbg_level = 0;
+int	is_pipe = 0;
+pid_t	child = 0;
+
 static inline __attribute__((nonnull(2)))
 	void cq_free(const size_t cq_length, struct command **cq) {
 	for (size_t i = 0; cq_length >= i && cq[i]; ++i) {
@@ -80,38 +84,20 @@ static inline void	add_redir_tofile(const char *path) {
 	close(fd);
 }
 
-static void	wait_child(int s) {
-	DBG_INFO("wait   | %d\n", child);
-	if (1 > child)
-		wait(&s);
-	else
-		waitpid(child, &s, WUNTRACED | WNOHANG);
-}
-
-static inline void	init_sigchld_handler(void) {
-	struct sigaction	sa;
-	bzero(&sa, sizeof(sa));
-	sa.sa_flags = SA_RESTART | SA_NODEFER;
-	sa.sa_handler = wait_child;
-
-	if (-1 == sigaction(SIGCHLD, &sa, NULL))
-		err(EXIT_FAILURE, "sigaction");
-}
-
 static inline void	parse_opt(int ac, char *const *av) {
 	static const struct option	l_opts[] = {
-		{ "debug", no_argument, &dbg_level    , 1 },
-		{ "file" , no_argument, &stdout_tofile, 1 },
-		{ 0      , 0          , 0             , 0 }
+		{ "debug", no_argument, &dbg_level, 1 },
+		{ "file" , no_argument, NULL      , 0 },
+		{ 0      , 0          , 0         , 0 }
 	};
 
 	int	opt;
 	while (-1 != (opt = getopt_long(ac, av, "df", l_opts, NULL))) {
 		switch (opt) {
-			case 'd': dbg_level      = 1; break ;
-			case 'f': stdout_tofile  = 1; break ;
+			case 'd': dbg_level = 1; break ;
+			case 'f': add_redir_tofile("./result.out"); break ;
 			case '?': exit(EXIT_FAILURE); break ;
-			default :                     break ;
+			default : break ;
 		}
 	}
 }
@@ -298,9 +284,7 @@ static inline void	cmd_run(const size_t cq_length,
 int	main(int argc, char *argv[]) {
 	parse_opt(argc, argv);
 
-	init_sigchld_handler();
-	if (stdout_tofile)
-		add_redir_tofile("./result.out");
+	init_sig_handlers();
 	setbuf(stdout, NULL);
 
 	while (1) {

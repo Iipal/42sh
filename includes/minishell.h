@@ -21,7 +21,7 @@
 #include <sys/wait.h>
 #include <sys/types.h>
 
-static pid_t	child;
+extern pid_t	child;
 
 # define EXEC_ERR_FMTMSG "'%s': command not found..."
 
@@ -35,16 +35,14 @@ struct command {
 ** options:
 ** --------
 */
-
-static int	dbg_level = 0;
-static int	stdout_tofile = 0;
+extern int	dbg_level;
 
 /*
 ** ------
 ** flags:
 ** ------
 */
-static int	is_pipe = 0;
+extern int	is_pipe;
 
 /*
 ** -----------------
@@ -72,5 +70,10 @@ static void	(*__dbg_lvl_callback[2])(const char *restrict fmt, ...) = {
 		__dbg_lvl_callback[dbg_level](fmt, __VA_ARGS__); \
 	} \
 })
+
+/*
+**	Initialize signal handlers
+*/
+void	init_sig_handlers(void);
 
 #endif /* MINISHELL_H */
