@@ -1,8 +1,9 @@
 #include "minishell.h"
 
-int	dbg_level = 0;
-int	is_pipe = 0;
-pid_t	child = 0;
+pid_t	g_child = 0;
+bool	g_is_cq_piped = false;
+int	g_opt_dbg_level = 0;
+int	g_opt_stdout_redir = 0;
 
 static inline __attribute__((nonnull(2)))
 	void cq_free(const size_t cq_length, struct command **cq) {
@@ -31,16 +32,16 @@ static void	cmd_pipe_queuing(const ssize_t isender,
 
 	int	fds[2] = { 0, 0 };
 	assert(-1 != pipe(fds));
-	assert(-1 != (child = fork()));
+	assert(-1 != (g_child = fork()));
 
-	if (!child) {
+	if (!g_child) {
 		pipe_redir(fds[1], STDOUT_FILENO, fds[0]);
 		cmd_pipe_queuing(isender - 1, isender, cq);
 		DBG_INFO("child  | %d(%d) %s created\n",
 			getpid(), getppid(), cq[isender]->argv[0]);
 		execvp(cq[isender]->argv[0], cq[isender]->argv);
 		errx(EXIT_FAILURE, EXEC_ERR_FMTMSG, cq[isender]->argv[0]);
-	} else if (0 < child) {
+	} else if (0 < g_child) {
 		DBG_INFO("child  | %d(%d) %s wait for input from %s\n",
 			getpid(), getppid(),
 			cq[ireceiver]->argv[0], cq[isender]->argv[0]);
@@ -67,7 +68,7 @@ static inline size_t	cq_precalc_pipe_length(char *restrict line) {
 	char	*l = strchr(line, '|');
 
 	if (l) {
-		is_pipe = 1;
+		g_is_cq_piped = true;
 		do {
 			l = strchr(l + 1, '|');
 			++n;
@@ -81,13 +82,14 @@ static inline void	add_redir_tofile(const char *path) {
 
 	if (-1 == fd)
 		err(EXIT_FAILURE, "open(%s)", path);
+	DBG_INFO("all output from STDOUT re-directed to %s\n", path);
 	dup2(fd, STDOUT_FILENO);
 	close(fd);
 }
 
 static inline void	parse_opt(int ac, char *const *av) {
 	static const struct option	l_opts[] = {
-		{ "debug", no_argument, &dbg_level, 1 },
+		{ "debug", no_argument, &g_opt_dbg_level, 1 },
 		{ "file" , no_argument, NULL      , 0 },
 		{ 0      , 0          , 0         , 0 }
 	};
@@ -95,8 +97,10 @@ static inline void	parse_opt(int ac, char *const *av) {
 	int	opt;
 	while (-1 != (opt = getopt_long(ac, av, "df", l_opts, NULL))) {
 		switch (opt) {
-			case 'd': dbg_level = 1; break ;
-			case 'f': add_redir_tofile("./result.out"); break ;
+			case 'd': g_opt_dbg_level = 1; break ;
+			case 'f': g_opt_stdout_redir = 1;
+					add_redir_tofile("./result.out");
+					break ;
 			case '?': exit(EXIT_FAILURE); break ;
 			default : break ;
 		}
@@ -182,85 +186,15 @@ static inline bool	cmd_parseline(char *restrict line,
 	return true;
 }
 
-static inline void	bunsupported(void) {
-	errx(EXIT_SUCCESS, "%s: builtins do not work with pipes or re-directions\n"
-		"\tType 'help' for more information.\n",
-		program_invocation_short_name);
-}
-
-static inline void	becho(const struct command *restrict cmd) {
-	(void)cmd;
-	printf("builtin: echo\n");
-}
-static inline void	bcd(const struct command *restrict cmd) {
-	if (2 == cmd->argc && -1 == chdir(cmd->argv[1])) {
-		fprintf(stderr, "cd: %m: %s\n", cmd->argv[1]);
-	} else {
-		fprintf(stderr, "cd: too many arguments\n");
-	}
-}
-static inline void	bsetenv(const struct command *restrict cmd) {
-	(void)cmd;
-	printf("builtin: setenv\n");
-}
-static inline void	bunsetenv(const struct command *restrict cmd) {
-	(void)cmd;
-	printf("builtin: unsetenv\n");
-}
-static inline void	benv(const struct command *restrict cmd) {
-	(void)cmd;
-	printf("builtin: env\n");
-}
-static inline void	bexit(const struct command *restrict cmd) {
-	(void)cmd;
-	exit(EXIT_SUCCESS);
-}
-static inline void	bhelp(const struct command *restrict cmd) {
-	(void)cmd;
-	printf("Builtins help:\n"
-		"\techo: display a line of text\n"
-		"\tcd: change the current directory\n"
-		"\tsetenv: add the variable to the environment\n"
-		"\tunsetenv: delete the variable from the environment\n"
-		"\tenv: run a program in modified environment\n"
-		"\texit: exit from '%s'\n"
-		"\thelp: print this info message\n"
-		"\n(!!!) No pipes or re-directions do not work for builtin commands\n",
-		program_invocation_short_name);
-}
-
-static inline bool	cmd_builtinrun(const struct command *restrict cmd) {
-	static void	(*cmd_fnptr_builtins[])(const struct command *restrict) = {
-		becho, bcd, bsetenv, bunsetenv, benv, bexit, bhelp, NULL
-	};
-	static const char	*cmd_str_builtins[] = {
-		"echo", "cd", "setenv", "unsetenv", "env", "exit", "help", NULL
-	};
-
-	size_t	i;
-	for (i = 0; cmd_str_builtins[i]; i++)
-		if (!strcmp(cmd->argv[0], cmd_str_builtins[i]))
-			break ;
-	if (cmd_str_builtins[i]) {
-		if (is_pipe)
-			bunsupported();
-		else
-			cmd_fnptr_builtins[i](cmd);
-		return true;
-	}
-	return false;
-}
-
 static inline void	cmd_solorun(const struct command *restrict cmd) {
-	child = vfork();
-	switch (child) {
+	g_child = vfork();
+	switch (g_child) {
 		case  0:
 			DBG_INFO("child  | %d(%d) %s\n",
 				getpid(), getppid(), cmd->argv[0]);
 			execvp(cmd->argv[0], cmd->argv);
 		case -1:
-			err(EXIT_FAILURE, EXEC_ERR_FMTMSG, cmd->argv[0]);
-			break ;
+			errx(EXIT_FAILURE, EXEC_ERR_FMTMSG, cmd->argv[0]);
 		default: pause(); break ;
 	}
 }
@@ -273,9 +207,9 @@ static inline void	cmd_run(const size_t cq_length,
 
 	DBG_INFO("parent | %d(%d)\n", getpid(), getppid());
 	if (1 < cq_length) {
-		if (!(child = fork()))
+		if (!(g_child = fork()))
 			cmd_pipe_queuing(cq_length - 2, cq_length - 1, cq);
-		else if (0 < child)
+		else if (0 < g_child)
 			pause();
 	} else {
 		cmd_solorun(cq[0]);
@@ -286,12 +220,18 @@ int	main(int argc, char *argv[]) {
 	parse_opt(argc, argv);
 
 	init_sig_handlers();
-	setbuf(stdout, NULL);
+
+	FILE	*defout = stdout;
+	if (g_opt_stdout_redir) {
+		defout = stderr;
+	} else {
+		setbuf(stdout, NULL);
+	}
 
 	while (1) {
 		char *restrict	line;
-		printf("$> ");
-		is_pipe = 0;
+		fprintf(defout, "$> ");
+		g_is_cq_piped = false;
 
 		if ((char*)-1 == (line = cmd_readline())) {
 			rewind(stdin);

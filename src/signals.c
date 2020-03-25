@@ -1,18 +1,18 @@
 #include "minishell.h"
 
 static void	sigchld_handler(int sig) {
-	DBG_INFO("SIGCHLD | %d | %d(%s)\n", child, sig, strsignal(sig));
+	DBG_INFO("SIGCHLD | %d | %d(%s)\n", g_child, sig, strsignal(sig));
 
 	int	dummy = 0;
-	if (1 > child)
+	if (1 > g_child)
 		wait(&dummy);
 	else
-		waitpid(child, &dummy, WUNTRACED | WNOHANG);
+		waitpid(g_child, &dummy, WUNTRACED | WNOHANG);
 }
 
 void	sigint_handler(int sig) {
-	DBG_INFO("SIGINT | %d(%s)\n", sig, strsignal(sig));
-	if (!child)
+	DBG_INFO("SIGINT | %d | %d(%s)\n", g_child, sig, strsignal(sig));
+	if (!g_child)
 		exit(EXIT_SUCCESS);
 }
 
@@ -31,5 +31,4 @@ static inline void	sig_set_handler(int __sig, int __flags,
 void	init_sig_handlers(void) {
 	sig_set_handler(SIGCHLD, SA_RESTART | SA_NODEFER, sigchld_handler);
 	sig_set_handler(SIGINT, SA_RESTART | SA_NODEFER, sigint_handler);
-	// sig_set_handler(SIG, SA_NODEFER, sigint_handler);
 }
