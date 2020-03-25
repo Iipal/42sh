@@ -190,16 +190,14 @@ static inline void	cmd_solorun(const struct command *restrict cmd) {
 	g_child = vfork();
 	switch (g_child) {
 		case  0:
-			DBG_INFO("child  | %d(%d) %s\n",
-				getpid(), getppid(), cmd->argv[0]);
+			DBG_INFO("child  | %d(%d) %s\n", getpid(), getppid(), cmd->argv[0]);
 			execvp(cmd->argv[0], cmd->argv);
 		case -1:
 			errx(EXIT_FAILURE, EXEC_ERR_FMTMSG, cmd->argv[0]);
+			break ;
 		default: {
-			sigset_t	chld_set;
-			sigfillset(&chld_set);
-			sigaddset(&chld_set, SIGCHLD);
-			sigsuspend(&chld_set);
+			DBG_INFO("wait   | %d\n", g_child);
+			waitpid(g_child, NULL, WUNTRACED);
 			break ;
 		}
 	}
@@ -213,10 +211,12 @@ static inline void	cmd_run(const size_t cq_length,
 
 	DBG_INFO("parent | %d(%d)\n", getpid(), getppid());
 	if (1 < cq_length) {
-		if (!(g_child = fork()))
+		if (!(g_child = fork())) {
 			cmd_pipe_queuing(cq_length - 2, cq_length - 1, cq);
-		else if (0 < g_child)
-			pause();
+		} else if (0 < g_child) {
+			DBG_INFO("wait   | %d\n", g_child);
+			waitpid(g_child, NULL, WUNTRACED);
+		}
 	} else {
 		cmd_solorun(cq[0]);
 	}
