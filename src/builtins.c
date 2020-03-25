@@ -83,9 +83,9 @@ static inline void	bhelp(const struct command *restrict cmd) {
 		"\techo: display a line of text\n"
 		"\tcd: change the current directory\n"
 		"\tsetenv: add the variable to the environment\n"
-		"\tunsetenv: delete the variable from the environment\n");
-	printf("\tenv: run a program in modified environment\n"
-		"\texit: exit from '%s'\n"
+		"\tunsetenv: delete the variable from the environment\n"
+		"\tenv: run a program in modified environment\n"
+		"\texit: exit from %s\n"
 		"\thelp: print this info message\n"
 		"\n(!!!) No pipes or re-directions do not work for builtin commands\n",
 		program_invocation_short_name);
