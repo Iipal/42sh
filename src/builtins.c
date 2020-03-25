@@ -36,24 +36,26 @@ static inline char	*bcd_replacer(const struct command *restrict cmd) {
 }
 
 static inline void	bcd(const struct command *restrict cmd) {
-	char	*chdir_path = NULL;
+	char *restrict	chdir_path = NULL;
 
-	if (1 == cmd->argc) {
-		if (!(chdir_path = getenv("HOME"))) {
-			chdir_path = getpwuid(getuid())->pw_dir;
+	switch(cmd->argc) {
+		case 1: {
+			if (!(chdir_path = getenv("HOME")))
+				chdir_path = getpwuid(getuid())->pw_dir;
+			break ;
 		}
-	} else if (2 == cmd->argc) {
-		chdir_path = cmd->argv[1];
-	} else if (3 == cmd->argc) {
-		if (!(chdir_path = bcd_replacer(cmd)))
-			return ;
+		case 2: chdir_path = cmd->argv[1]; break ;
+		case 3: {
+			if (!(chdir_path = bcd_replacer(cmd)))
+				return ;
+			break ;
+		}
+		default: fprintf(stderr, "cd: too many arguments\n"); return ;
 	}
 	int	chdir_ret = chdir(chdir_path);
 	if (-1 == chdir_ret) {
 		fprintf(stderr, "cd: %m: %s\n", chdir_path);
-	}
-	if (3 == cmd->argc && !chdir_ret) {
-		printf("%s\n", chdir_path);
+	} else if (3 == cmd->argc) {
 		free(chdir_path);
 	}
 }
