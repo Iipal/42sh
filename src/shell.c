@@ -9,7 +9,7 @@ static inline __attribute__((nonnull(2)))
 	void cq_free(const size_t cq_length, struct command **cq) {
 	for (size_t i = 0; cq_length >= i && cq[i]; ++i) {
 		if (cq[i]->argv) {
-			for (int j = 0; cq[i]->argc >= j && cq[i]->argv[j]; j++)
+			for (int j = 0; cq[i]->argc >= j; j++)
 				free(cq[i]->argv[j]);
 			free(cq[i]->argv);
 		}
