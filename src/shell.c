@@ -195,7 +195,13 @@ static inline void	cmd_solorun(const struct command *restrict cmd) {
 			execvp(cmd->argv[0], cmd->argv);
 		case -1:
 			errx(EXIT_FAILURE, EXEC_ERR_FMTMSG, cmd->argv[0]);
-		default: pause(); break ;
+		default: {
+			sigset_t	chld_set;
+			sigfillset(&chld_set);
+			sigaddset(&chld_set, SIGCHLD);
+			sigsuspend(&chld_set);
+			break ;
+		}
 	}
 }
 
@@ -229,9 +235,10 @@ int	main(int argc, char *argv[]) {
 	}
 
 	while (1) {
+		g_is_cq_piped = false;
+		g_child = 0;
 		char *restrict	line;
 		fprintf(defout, "$> ");
-		g_is_cq_piped = false;
 
 		if ((char*)-1 == (line = cmd_readline())) {
 			rewind(stdin);
