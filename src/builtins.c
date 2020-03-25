@@ -16,17 +16,17 @@ static inline void	becho(const struct command *restrict cmd) {
 }
 
 static inline char	*bcd_replacer(const struct command *restrict cmd) {
-	size_t	search_len = strlen(cmd->argv[1]);
-	size_t	replace_len = strlen(cmd->argv[2]);
-	char	*rep_cwd = NULL;
-	char	*out = get_current_dir_name();
-	char	*copy = strdupa(out);
+	char *restrict	rep_cwd = NULL;
+	char *restrict	out = get_current_dir_name();
+	char *restrict	copy = strdupa(out);
 
 	if (!(rep_cwd = strstr(copy, cmd->argv[1]))) {
 		fprintf(stderr, "cd: string not in pwd: %s\n", cmd->argv[1]);
 		free(out);
 		return NULL;
 	}
+	size_t	search_len = strlen(cmd->argv[1]);
+	size_t	replace_len = strlen(cmd->argv[2]);
 	off_t	start_offset = rep_cwd - copy;
 	if (replace_len > search_len)
 		assert(out = realloc(out, strlen(out) + replace_len - search_len));
