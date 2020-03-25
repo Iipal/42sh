@@ -27,7 +27,7 @@ extern pid_t	g_child;
 
 extern bool	g_is_cq_piped;
 
-extern int	g_opt_stdout_redir;
+extern FILE	*g_defout;
 
 /*
 **	Initialize signal handlers

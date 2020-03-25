@@ -3,7 +3,7 @@
 pid_t	g_child = 0;
 bool	g_is_cq_piped = false;
 int	g_opt_dbg_level = 0;
-int	g_opt_stdout_redir = 0;
+FILE	*g_defout = NULL;
 
 static inline __attribute__((nonnull(2)))
 	void cq_free(const size_t cq_length, struct command **cq) {
@@ -90,15 +90,15 @@ static inline void	add_redir_tofile(const char *path) {
 static inline void	parse_opt(int ac, char *const *av) {
 	static const struct option	l_opts[] = {
 		{ "debug", no_argument, &g_opt_dbg_level, 1 },
-		{ "file" , no_argument, NULL      , 0 },
-		{ 0      , 0          , 0         , 0 }
+		{ "file" , no_argument, NULL            , 0 },
+		{ 0      , 0          , 0               , 0 }
 	};
 
 	int	opt;
 	while (-1 != (opt = getopt_long(ac, av, "df", l_opts, NULL))) {
 		switch (opt) {
 			case 'd': g_opt_dbg_level = 1; break ;
-			case 'f': g_opt_stdout_redir = 1;
+			case 'f': g_defout = stderr;
 					add_redir_tofile("./result.out");
 					break ;
 			case '?': exit(EXIT_FAILURE); break ;
@@ -223,26 +223,22 @@ static inline void	cmd_run(const size_t cq_length,
 }
 
 int	main(int argc, char *argv[]) {
+	g_defout = stdout;
 	parse_opt(argc, argv);
 
 	init_sig_handlers();
 
-	FILE	*defout = stdout;
-	if (g_opt_stdout_redir) {
-		defout = stderr;
-	} else {
-		setbuf(stdout, NULL);
-	}
+	setbuf(stdout, NULL);
 
 	while (1) {
 		g_is_cq_piped = false;
 		g_child = 0;
 		char *restrict	line;
-		fprintf(defout, "$> ");
+		fprintf(g_defout, "$> ");
 
 		if ((char*)-1 == (line = cmd_readline())) {
 			rewind(stdin);
-			puts("");
+			fwrite("\n", sizeof(char), 1, g_defout);
 			continue ;
 		}
 		if (!line)
