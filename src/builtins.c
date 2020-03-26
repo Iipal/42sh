@@ -105,9 +105,29 @@ static inline void	benv(const struct command *restrict cmd) {
 }
 
 static inline void	bsetenv(const struct command *restrict cmd) {
-	(void)cmd;
-	printf("builtin: setenv\n");
+	switch (cmd->argc) {
+		case 1: {
+			benv(cmd);
+			break ;
+		}
+		case 2: {
+			if (-1 == setenv(cmd->argv[1], "", 1))
+				perror(cmd->argv[0]);
+			break ;
+		}
+		case 3: {
+			if (-1 == setenv(cmd->argv[1], cmd->argv[2], 1))
+				perror(cmd->argv[0]);
+			break ;
+		}
+		default: {
+			fprintf(stderr, "%s: too many arguments\n", cmd->argv[0]);
+			fprintf(stderr, " setenv [VAR] [VALUE]\n");
+			break ;
+		}
+	}
 }
+
 static inline void	bunsetenv(const struct command *restrict cmd) {
 	if (cmd->argc == 2) {
 		if (-1 == unsetenv(cmd->argv[1]))
