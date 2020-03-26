@@ -73,8 +73,14 @@ static inline void	benv(const struct command *restrict cmd) {
 	printf("builtin: env\n");
 }
 static inline void	bexit(const struct command *restrict cmd) {
-	(void)cmd;
-	exit(EXIT_SUCCESS);
+	int	exit_status = EXIT_SUCCESS;
+	if (2 < cmd->argc) {
+		fprintf(stderr, "%s: too many arguments\n", cmd->argv[0]);
+		return ;
+	} else if (2 == cmd->argc) {
+		exit_status = atoi(cmd->argv[1]);
+	}
+	exit(exit_status);
 }
 static inline void	bhelp(const struct command *restrict cmd) {
 	if (1 != cmd->argc) {
