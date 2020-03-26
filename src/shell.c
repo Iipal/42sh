@@ -3,6 +3,7 @@
 pid_t	g_child = 0;
 bool	g_is_cq_piped = false;
 int	g_opt_dbg_level = 0;
+int	g_opt_stdout_redir = 0;
 FILE	*g_defout = NULL;
 
 static inline __attribute__((nonnull(2)))
@@ -89,21 +90,23 @@ static inline void	add_redir_tofile(const char *path) {
 
 static inline void	parse_opt(int ac, char *const *av) {
 	static const struct option	l_opts[] = {
-		{ "debug", no_argument, &g_opt_dbg_level, 1 },
-		{ "file" , no_argument, NULL            , 0 },
-		{ 0      , 0          , 0               , 0 }
+		{ "debug", no_argument, &g_opt_dbg_level   , 1 },
+		{ "file" , no_argument, &g_opt_stdout_redir, 1 },
+		{ 0      , 0          , 0                  , 0 }
 	};
 
 	int	opt;
 	while (-1 != (opt = getopt_long(ac, av, "df", l_opts, NULL))) {
 		switch (opt) {
-			case 'd': g_opt_dbg_level = 1; break ;
-			case 'f': g_defout = stderr;
-					add_redir_tofile("./result.out");
-					break ;
-			case '?': exit(EXIT_FAILURE); break ;
+			case 'd': g_opt_dbg_level    = 1; break ;
+			case 'f': g_opt_stdout_redir = 1; break ;
+			case '?': exit(EXIT_FAILURE);     break ;
 			default : break ;
 		}
+	}
+	if (g_opt_stdout_redir) {
+		g_defout = stderr;
+		add_redir_tofile("./.msh.out");
 	}
 }
 
@@ -243,6 +246,8 @@ int	main(int argc, char *argv[]) {
 		}
 		if (!line)
 			continue ;
+		if (g_opt_stdout_redir)
+			printf("$> %s\n", line);
 
 		struct command	**cq;
 		size_t	cq_length = cq_precalc_pipe_length(line);

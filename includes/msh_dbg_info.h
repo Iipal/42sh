@@ -8,8 +8,6 @@
 # include <stdio.h>
 # include <stdarg.h>
 
-extern int	g_opt_dbg_level;
-
 static inline void	__dbg_info_none(const char *restrict fmt, ...) {
 	(void)fmt;
 }
