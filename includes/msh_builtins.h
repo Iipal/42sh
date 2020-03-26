@@ -14,5 +14,6 @@
 **	Check is current \param cmd is a builtin and run
 */
 bool	cmd_builtinrun(const struct command *restrict cmd);
+bool	cmd_fast_builtinrun(const struct command cmd);
 
 #endif /* MSH_BUILTINS_H */

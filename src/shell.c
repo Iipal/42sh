@@ -4,6 +4,7 @@ pid_t	g_child = 0;
 bool	g_is_cq_piped = false;
 int	g_opt_dbg_level = 0;
 int	g_opt_stdout_redir = 0;
+static int	g_opt_help = 0;
 FILE	*g_defout = NULL;
 
 static inline __attribute__((nonnull(2)))
@@ -89,20 +90,30 @@ static inline void	add_redir_tofile(const char *path) {
 }
 
 static inline void	parse_opt(int ac, char *const *av) {
-	static const struct option	l_opts[] = {
+	static struct option	l_opts[] = {
 		{ "debug", no_argument, &g_opt_dbg_level   , 1 },
 		{ "file" , no_argument, &g_opt_stdout_redir, 1 },
+		{ "help" , no_argument, &g_opt_help        , 1 },
 		{ 0      , 0          , 0                  , 0 }
 	};
 
 	int	opt;
-	while (-1 != (opt = getopt_long(ac, av, "df", l_opts, NULL))) {
+	while (-1 != (opt = getopt_long(ac, av, "dfh", l_opts, NULL))) {
 		switch (opt) {
-			case 'd': g_opt_dbg_level    = 1; break ;
+			case 'd': g_opt_dbg_level = 1;    break ;
 			case 'f': g_opt_stdout_redir = 1; break ;
+			case 'h': g_opt_help = 1;         break ;
 			case '?': exit(EXIT_FAILURE);     break ;
 			default : break ;
 		}
+	}
+	if (g_opt_help) {
+		printf("Mini-Shell help:\n"
+"\t-d(--debug)\toutput additional debug information to stderr\n"
+"\t-f(--file) \tre-direct stdout to ./.msh.out (not applicable to builtins)\n"
+"\t-h(--help) \tprint this info message and exit\n");
+		cmd_fast_builtinrun(CMD_FAST_NEW(1, "help", NULL));
+		exit(EXIT_SUCCESS);
 	}
 	if (g_opt_stdout_redir) {
 		g_defout = stderr;

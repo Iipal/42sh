@@ -136,13 +136,13 @@ static inline void	bhelp(const struct command *restrict cmd) {
 		return ;
 	}
 	fprintf(g_defout, "Builtins help:\n"
-		"\techo: display a line of text\n"
-		"\tcd: change the current directory\n"
-		"\tsetenv: add the variable to the environment\n"
-		"\tunsetenv: delete the variable from the environment\n"
-		"\tenv: run a program in modified environment\n"
-		"\texit: exit the shell\n"
-		"\thelp: print this info message\n"
+		"\techo    \tdisplay a line of text\n"
+		"\tcd      \tchange the current directory\n"
+		"\tsetenv  \tadd the variable to the environment\n"
+		"\tunsetenv\tdelete the variable from the environment\n"
+		"\tenv     \trun a program in modified environment\n"
+		"\texit    \texit the shell\n"
+		"\thelp    \tprint this info message\n"
 		"\n(!!!) No pipes or re-directions do not work for builtin commands\n");
 }
 
@@ -157,23 +157,26 @@ bool	cmd_builtinrun(const struct command *restrict cmd) {
 		{ "help"    , bhelp    , 1},
 		{ NULL      , NULL     , 0}
 	};
-	size_t	i;
+	size_t	match;
 
-	for (i = 0; __bds[i].bname; i++)
-		if (!strcmp(cmd->argv[0], __bds[i].bname))
+	for (match = 0; __bds[match].bname; ++match)
+		if (!strcmp(__bds[match].bname, cmd->argv[0]))
 			break ;
-	if (__bds[i].bname) {
+	if (__bds[match].bname) {
 		if (g_is_cq_piped) {
 			bunsupported();
 		} else {
-			if (__bds[i].max_argc < cmd->argc) {
-				fprintf(stderr, "%s: too many arguments\n",
-					__bds[i].bname);
+			if (__bds[match].max_argc < cmd->argc) {
+				fprintf(stderr, "%s: too many arguments\n", __bds[match].bname);
 			} else {
-				__bds[i].bfnptr(cmd);
+				__bds[match].bfnptr(cmd);
 			}
 		}
 		return true;
 	}
 	return false;
+}
+
+bool	cmd_fast_builtinrun(const struct command cmd) {
+	return cmd_builtinrun(&cmd);
 }
