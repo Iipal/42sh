@@ -1,5 +1,18 @@
 #include "minishell.h"
 
+struct builtin_ds {
+	const char *restrict	bname;
+	void	(*bfnptr)(const struct command *restrict cmd);
+};
+
+static inline void	becho(const struct command *restrict cmd);
+static inline void	bcd(const struct command *restrict cmd);
+static inline void	benv(const struct command *restrict cmd);
+static inline void	bsetenv(const struct command *restrict cmd);
+static inline void	bunsetenv(const struct command *restrict cmd);
+static inline void	bexit(const struct command *restrict cmd);
+static inline void	bhelp(const struct command *restrict cmd);
+
 static inline void	bunsupported(void) {
 	fprintf(stderr, "%s: builtins do not work with pipes or re-directions\n"
 		"\tType 'help' for more information.\n",
@@ -167,22 +180,26 @@ static inline void	bhelp(const struct command *restrict cmd) {
 }
 
 bool	cmd_builtinrun(const struct command *restrict cmd) {
-	static void	(*cmd_fnptr_builtins[])(const struct command *restrict) = {
-		becho, bcd, benv, bsetenv, bunsetenv, bexit, bhelp, NULL
-	};
-	static const char	*cmd_str_builtins[] = {
-		"echo", "cd", "env", "setenv", "unsetenv", "exit", "help", NULL
+	static const struct builtin_ds	__builtins_ds[] = {
+		{ "echo"    , becho     },
+		{ "cd"      , bcd       },
+		{ "env"     , benv      },
+		{ "setenv"  , bsetenv   },
+		{ "unsetenv", bunsetenv },
+		{ "exit"    , bexit     },
+		{ "help"    , bhelp     },
+		{ NULL      , NULL      }
 	};
 	size_t	i;
 
-	for (i = 0; cmd_str_builtins[i]; i++)
-		if (!strcmp(cmd->argv[0], cmd_str_builtins[i]))
+	for (i = 0; __builtins_ds[i].bname; i++)
+		if (!strcmp(cmd->argv[0], __builtins_ds[i].bname))
 			break ;
-	if (cmd_str_builtins[i]) {
+	if (__builtins_ds[i].bname) {
 		if (g_is_cq_piped) {
 			bunsupported();
 		} else {
-			cmd_fnptr_builtins[i](cmd);
+			__builtins_ds[i].bfnptr(cmd);
 		}
 		return true;
 	}
