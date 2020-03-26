@@ -9,11 +9,15 @@ static inline void	bunsupported(void) {
 static inline void	becho(const struct command *restrict cmd) {
 	bool	is_trail_newline = true;
 	int	i = 1;
-	if (2 == cmd->argc && !strcmp("--help", cmd->argv[1])) {
-		goto becho_help_message;
-	} else if (2 <= cmd->argc && !strcmp("-n", cmd->argv[1])) {
-		is_trail_newline = false;
-		i = 2;
+
+	if (2 == cmd->argc) {
+		if (!strcmp("--help", cmd->argv[1]))
+			goto becho_help_message;
+	} else if (2 <= cmd->argc) {
+		if (!strcmp("-n", cmd->argv[1])) {
+			is_trail_newline = false;
+			i = 2;
+		}
 	}
 
 	for (; cmd->argc > i; ++i) {
