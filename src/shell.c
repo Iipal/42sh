@@ -41,14 +41,14 @@ static void	cmd_pipe_queuing(const ssize_t isender,
 		DBG_INFO("child  | %d(%d) %s created\n",
 			getpid(), getppid(), cq[isender]->argv[0]);
 		execvp(cq[isender]->argv[0], cq[isender]->argv);
-		errx(EXIT_FAILURE, EXEC_ERR_FMTMSG, cq[isender]->argv[0]);
+		errx(EXIT_FAILURE, "%s: command not found...", cq[isender]->argv[0]);
 	} else if (0 < g_child) {
 		DBG_INFO("child  | %d(%d) %s wait for input from %s\n",
 			getpid(), getppid(),
 			cq[ireceiver]->argv[0], cq[isender]->argv[0]);
 		pipe_redir(fds[0], STDIN_FILENO, fds[1]);
 		execvp(cq[ireceiver]->argv[0], cq[ireceiver]->argv);
-		errx(EXIT_FAILURE, EXEC_ERR_FMTMSG, cq[ireceiver]->argv[0]);
+		errx(EXIT_FAILURE, "%s: command not found...", cq[ireceiver]->argv[0]);
 	}
 }
 
@@ -196,7 +196,7 @@ static inline void	cmd_solorun(const struct command *restrict cmd) {
 			DBG_INFO("child  | %d(%d) %s\n", getpid(), getppid(), cmd->argv[0]);
 			execvp(cmd->argv[0], cmd->argv);
 		case -1:
-			errx(EXIT_FAILURE, EXEC_ERR_FMTMSG, cmd->argv[0]);
+			errx(EXIT_FAILURE, "%s: command not found...", cmd->argv[0]);
 			break ;
 		default: {
 			DBG_INFO("wait   | %d\n", g_child);
