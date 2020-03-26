@@ -147,12 +147,13 @@ static inline void	bexit(const struct command *restrict cmd) {
 	}
 	exit(exit_status);
 }
+
 static inline void	bhelp(const struct command *restrict cmd) {
 	if (1 != cmd->argc) {
 		fprintf(stderr, "%s: too many arguments\n", cmd->argv[0]);
 		return ;
 	}
-	printf("Builtins help:\n"
+	fprintf(g_defout, "Builtins help:\n"
 		"\techo: display a line of text\n"
 		"\tcd: change the current directory\n"
 		"\tsetenv: add the variable to the environment\n"
@@ -165,10 +166,10 @@ static inline void	bhelp(const struct command *restrict cmd) {
 
 bool	cmd_builtinrun(const struct command *restrict cmd) {
 	static void	(*cmd_fnptr_builtins[])(const struct command *restrict) = {
-		becho, bcd, bsetenv, bunsetenv, benv, bexit, bhelp, NULL
+		becho, bcd, benv, bsetenv, bunsetenv, bexit, bhelp, NULL
 	};
 	static const char	*cmd_str_builtins[] = {
-		"echo", "cd", "setenv", "unsetenv", "env", "exit", "help", NULL
+		"echo", "cd", "env", "setenv", "unsetenv", "exit", "help", NULL
 	};
 	size_t	i;
 
