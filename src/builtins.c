@@ -64,13 +64,19 @@ static inline void	bcd(const struct command *restrict cmd) {
 				chdir_path = getpwuid(getuid())->pw_dir;
 			break ;
 		}
-		case 2: chdir_path = cmd->argv[1]; break ;
+		case 2: {
+			chdir_path = cmd->argv[1];
+			break ;
+		}
 		case 3: {
 			if (!(chdir_path = bcd_replacer(cmd)))
 				return ;
 			break ;
 		}
-		default: fprintf(stderr, "cd: too many arguments\n"); return ;
+		default: {
+			fprintf(stderr, "%s: too many arguments\n", cmd->argv[0]);
+			return ;
+		}
 	}
 	int	chdir_ret = chdir(chdir_path);
 	if (-1 == chdir_ret) {
@@ -104,7 +110,7 @@ static inline void	bexit(const struct command *restrict cmd) {
 }
 static inline void	bhelp(const struct command *restrict cmd) {
 	if (1 != cmd->argc) {
-		fprintf(stderr, "help: too many arguments\n");
+		fprintf(stderr, "%s: too many arguments\n", cmd->argv[0]);
 		return ;
 	}
 	printf("Builtins help:\n"
@@ -113,10 +119,9 @@ static inline void	bhelp(const struct command *restrict cmd) {
 		"\tsetenv: add the variable to the environment\n"
 		"\tunsetenv: delete the variable from the environment\n"
 		"\tenv: run a program in modified environment\n"
-		"\texit: exit from %s\n"
+		"\texit: exit the shell\n"
 		"\thelp: print this info message\n"
-		"\n(!!!) No pipes or re-directions do not work for builtin commands\n",
-		program_invocation_short_name);
+		"\n(!!!) No pipes or re-directions do not work for builtin commands\n");
 }
 
 bool	cmd_builtinrun(const struct command *restrict cmd) {
