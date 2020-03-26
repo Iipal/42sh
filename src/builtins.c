@@ -3,6 +3,7 @@
 struct builtin_ds {
 	const char *restrict	bname;
 	void	(*bfnptr)(const struct command *restrict cmd);
+	size_t	max_argc;
 };
 
 static inline void	becho(const struct command *restrict cmd);
@@ -21,12 +22,13 @@ static inline void	bunsupported(void) {
 
 static inline void	becho(const struct command *restrict cmd) {
 	bool	is_trail_newline = true;
-	int	i = 1;
+	size_t	i = 1;
 
 	if (2 == cmd->argc) {
 		if (!strcmp("--help", cmd->argv[1]))
 			goto becho_help_message;
-	} else if (2 <= cmd->argc) {
+	}
+	if (2 <= cmd->argc) {
 		if (!strcmp("-n", cmd->argv[1])) {
 			is_trail_newline = false;
 			i = 2;
@@ -73,27 +75,13 @@ static inline char	*bcd_replacer(const struct command *restrict cmd) {
 }
 
 static inline void	bcd(const struct command *restrict cmd) {
-	char *restrict	chdir_path = NULL;
-
-	switch(cmd->argc) {
-		case 1: {
-			if (!(chdir_path = getenv("HOME")))
-				chdir_path = getpwuid(getuid())->pw_dir;
-			break ;
-		}
-		case 2: {
-			chdir_path = cmd->argv[1];
-			break ;
-		}
-		case 3: {
-			if (!(chdir_path = bcd_replacer(cmd)))
-				return ;
-			break ;
-		}
-		default: {
-			fprintf(stderr, "%s: too many arguments\n", cmd->argv[0]);
+	char *restrict	chdir_path = cmd->argv[1];
+	if (1 == cmd->argc) {
+		if (!(chdir_path = getenv("HOME")))
+			chdir_path = getpwuid(getuid())->pw_dir;
+	} else if (3 == cmd->argc) {
+		if (!(chdir_path = bcd_replacer(cmd)))
 			return ;
-		}
 	}
 
 	if (-1 == chdir(chdir_path))
@@ -112,52 +100,31 @@ static inline void	benv(const struct command *restrict cmd) {
 		case 2: {
 			break ;
 		}
-		default: {
-			fprintf(stderr, "%s: too many arguments\n", cmd->argv[0]);
-			break ;
-		}
+		default: break ;
 	}
 }
 
 static inline void	bsetenv(const struct command *restrict cmd) {
-	switch (cmd->argc) {
-		case 1: {
-			benv(cmd);
-			break ;
-		}
-		case 2: {
-			if (-1 == setenv(cmd->argv[1], "", 1))
-				perror(cmd->argv[0]);
-			break ;
-		}
-		case 3: {
-			if (-1 == setenv(cmd->argv[1], cmd->argv[2], 1))
-				perror(cmd->argv[0]);
-			break ;
-		}
-		default: {
-			fprintf(stderr, "%s: too many arguments\n", cmd->argv[0]);
-			fprintf(stderr, " setenv [VAR] [VALUE]\n");
-			break ;
-		}
+	if (1 == cmd->argc) {
+		benv(cmd);
+	} else {
+		if (-1 == setenv(cmd->argv[1], (3 == cmd->argc) ? cmd->argv[2] : "", 1))
+			perror(cmd->argv[0]);
 	}
 }
 
 static inline void	bunsetenv(const struct command *restrict cmd) {
-	if (cmd->argc == 2) {
+	if (1 == cmd->argc) {
+		benv(cmd);
+	} else if (2 == cmd->argc) {
 		if (-1 == unsetenv(cmd->argv[1]))
 			perror(cmd->argv[0]);
-	} else {
-		fprintf(stderr, "%s: too many arguments\n", cmd->argv[0]);
 	}
 }
 
 static inline void	bexit(const struct command *restrict cmd) {
 	int	exit_status = EXIT_SUCCESS;
-	if (2 < cmd->argc) {
-		fprintf(stderr, "%s: too many arguments\n", cmd->argv[0]);
-		return ;
-	} else if (2 == cmd->argc) {
+	if (2 == cmd->argc) {
 		exit_status = atoi(cmd->argv[1]);
 	}
 	exit(exit_status);
@@ -180,26 +147,31 @@ static inline void	bhelp(const struct command *restrict cmd) {
 }
 
 bool	cmd_builtinrun(const struct command *restrict cmd) {
-	static const struct builtin_ds	__builtins_ds[] = {
-		{ "echo"    , becho     },
-		{ "cd"      , bcd       },
-		{ "env"     , benv      },
-		{ "setenv"  , bsetenv   },
-		{ "unsetenv", bunsetenv },
-		{ "exit"    , bexit     },
-		{ "help"    , bhelp     },
-		{ NULL      , NULL      }
+	static const struct builtin_ds	__bds[] = {
+		{ "echo"    , becho    , ~((size_t)0)},
+		{ "cd"      , bcd      , 3},
+		{ "env"     , benv     , 2},
+		{ "setenv"  , bsetenv  , 3},
+		{ "unsetenv", bunsetenv, 2},
+		{ "exit"    , bexit    , 2},
+		{ "help"    , bhelp    , 1},
+		{ NULL      , NULL     , 0}
 	};
 	size_t	i;
 
-	for (i = 0; __builtins_ds[i].bname; i++)
-		if (!strcmp(cmd->argv[0], __builtins_ds[i].bname))
+	for (i = 0; __bds[i].bname; i++)
+		if (!strcmp(cmd->argv[0], __bds[i].bname))
 			break ;
-	if (__builtins_ds[i].bname) {
+	if (__bds[i].bname) {
 		if (g_is_cq_piped) {
 			bunsupported();
 		} else {
-			__builtins_ds[i].bfnptr(cmd);
+			if (__bds[i].max_argc < cmd->argc) {
+				fprintf(stderr, "%s: too many arguments\n",
+					__bds[i].bname);
+			} else {
+				__bds[i].bfnptr(cmd);
+			}
 		}
 		return true;
 	}
