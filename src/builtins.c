@@ -1,7 +1,7 @@
 #include "minishell.h"
 
 static inline void	bunsupported(void) {
-	errx(EXIT_SUCCESS, "%s: builtins do not work with pipes or re-directions\n"
+	fprintf(stderr, "%s: builtins do not work with pipes or re-directions\n"
 		"\tType 'help' for more information.\n",
 		program_invocation_short_name);
 }
