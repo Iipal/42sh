@@ -7,12 +7,32 @@ static inline void	bunsupported(void) {
 }
 
 static inline void	becho(const struct command *restrict cmd) {
-	for (int i = 1; cmd->argc > i; ++i) {
-		printf("%s", cmd->argv[i]);
-		if (i + 1 != cmd->argc)
-			printf(" ");
+	bool	is_trail_newline = true;
+	int	i = 1;
+	if (2 == cmd->argc && !strcmp("--help", cmd->argv[1])) {
+		goto becho_help_message;
+	} else if (2 <= cmd->argc && !strcmp("-n", cmd->argv[1])) {
+		is_trail_newline = false;
+		i = 2;
 	}
-	printf("\n");
+
+	for (; cmd->argc > i; ++i) {
+		fwrite(cmd->argv[i], sizeof(char), strlen(cmd->argv[i]), g_defout);
+		if (i + 1 != cmd->argc) {
+			fwrite(" ", sizeof(char), 1, g_defout);
+		}
+	}
+	if (is_trail_newline)
+		fwrite("\n", sizeof(char), 1, g_defout);
+	return ;
+
+becho_help_message:
+	printf("Usage: %s [SHORT-OPTION]... [STRING]...\n"
+		"  or : %s LONG-OPTION\n"
+		"Echo the STRING(s) to standard output.\n"
+		"\t-n\tdo not output the trailing newline\n"
+		"\t--help\tdisplay this help and exit\n",
+		cmd->argv[0], cmd->argv[0]);
 }
 
 static inline char	*bcd_replacer(const struct command *restrict cmd) {
