@@ -31,12 +31,12 @@ static inline void	becho(const struct command *restrict cmd) {
 	return ;
 
 becho_help_message:
-	printf("Usage: %s [SHORT-OPTION]... [STRING]...\n"
-		"  or : %s LONG-OPTION\n"
+	fprintf(g_defout,
+		"Usage: echo [SHORT-OPTION]... [STRING]...\n"
+		"  or : echo LONG-OPTION\n"
 		"Echo the STRING(s) to standard output.\n"
 		"\t-n\tdo not output the trailing newline\n"
-		"\t--help\tdisplay this help and exit\n",
-		cmd->argv[0], cmd->argv[0]);
+		"\t--help\tdisplay this help and exit\n");
 }
 
 static inline char	*bcd_replacer(const struct command *restrict cmd) {
@@ -82,19 +82,21 @@ static inline void	bcd(const struct command *restrict cmd) {
 			return ;
 		}
 	}
-	int	chdir_ret = chdir(chdir_path);
-	if (-1 == chdir_ret) {
+
+	if (-1 == chdir(chdir_path))
 		fprintf(stderr, "cd: %m: %s\n", chdir_path);
-	} else if (3 == cmd->argc) {
+	if (3 == cmd->argc)
 		free(chdir_path);
-	}
 }
 
 static inline void	benv(const struct command *restrict cmd) {
 	switch (cmd->argc) {
 		case 1: {
 			for (size_t i = 0; environ[i]; ++i)
-				puts(environ[i]);
+				fputs(environ[i], g_defout);
+			break ;
+		}
+		case 2: {
 			break ;
 		}
 		default: {
