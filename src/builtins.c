@@ -90,6 +90,20 @@ static inline void	bcd(const struct command *restrict cmd) {
 	}
 }
 
+static inline void	benv(const struct command *restrict cmd) {
+	switch (cmd->argc) {
+		case 1: {
+			for (size_t i = 0; environ[i]; ++i)
+				puts(environ[i]);
+			break ;
+		}
+		default: {
+			fprintf(stderr, "%s: too many arguments\n", cmd->argv[0]);
+			break ;
+		}
+	}
+}
+
 static inline void	bsetenv(const struct command *restrict cmd) {
 	(void)cmd;
 	printf("builtin: setenv\n");
