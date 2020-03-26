@@ -7,7 +7,7 @@
 
 struct command {
 	char	**argv;
-	int	argc;
+	size_t	argc;
 };
 
 #endif /* MSH_STRUCTS_H */
