@@ -109,13 +109,14 @@ static inline void	bsetenv(const struct command *restrict cmd) {
 	printf("builtin: setenv\n");
 }
 static inline void	bunsetenv(const struct command *restrict cmd) {
-	(void)cmd;
-	printf("builtin: unsetenv\n");
+	if (cmd->argc == 2) {
+		if (-1 == unsetenv(cmd->argv[1]))
+			perror(cmd->argv[0]);
+	} else {
+		fprintf(stderr, "%s: too many arguments\n", cmd->argv[0]);
+	}
 }
-static inline void	benv(const struct command *restrict cmd) {
-	(void)cmd;
-	printf("builtin: env\n");
-}
+
 static inline void	bexit(const struct command *restrict cmd) {
 	int	exit_status = EXIT_SUCCESS;
 	if (2 < cmd->argc) {
