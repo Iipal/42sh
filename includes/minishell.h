@@ -39,6 +39,9 @@ extern bool	g_is_cq_piped;
 // Setting-up default output stream if -f flag specified
 extern FILE	*g_defout;
 
+extern struct command *restrict *restrict	g_cq;
+extern size_t	g_cq_len;
+
 void	parse_options(int ac, char *const *av);
 
 void	init_sig_handlers(void);
@@ -46,11 +49,6 @@ void	init_sig_handlers(void);
 void	shell(void);
 
 char	*cmd_readline(void);
-
-bool	cmd_parseline(char *restrict line,
-				struct command *restrict *restrict cq);
-
-char	*line_prepare(const char *restrict line);
 
 void	cmd_run(const size_t cq_length, struct command *restrict *restrict cq);
 void	cmd_solorun(const struct command *restrict cmd);
