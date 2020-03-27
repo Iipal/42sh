@@ -91,16 +91,17 @@ static inline void	bcd(const struct command *restrict cmd) {
 }
 
 static inline void	benv(const struct command *restrict cmd) {
-	switch (cmd->argc) {
-		case 1: {
-			for (size_t i = 0; environ[i]; ++i)
-				fputs(environ[i], g_defout);
-			break ;
-		}
-		case 2: {
-			break ;
-		}
-		default: break ;
+	if (1 == cmd->argc) {
+		for (size_t i = 0; environ[i]; ++i)
+			fputs(environ[i], g_defout);
+	} else {
+		struct command	c;
+		c.argc = cmd->argc - 1;
+		assert(c.argv = calloc(c.argc, sizeof(*c.argv)));
+		for (size_t i = 0; c.argc >= i; ++i)
+			c.argv[i] = cmd->argv[i + 1];
+		cmd_solorun(&c);
+		free(c.argv);
 	}
 }
 
@@ -150,7 +151,7 @@ bool	cmd_builtinrun(const struct command *restrict cmd) {
 	static const struct builtin_ds	__bds[] = {
 		{ "echo"    , becho    , ~((size_t)0)},
 		{ "cd"      , bcd      , 3},
-		{ "env"     , benv     , 2},
+		{ "env"     , benv     , ~((size_t)0)},
 		{ "setenv"  , bsetenv  , 3},
 		{ "unsetenv", bunsetenv, 2},
 		{ "exit"    , bexit    , 2},
