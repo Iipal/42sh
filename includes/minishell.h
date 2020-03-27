@@ -17,6 +17,7 @@
 # include <signal.h>
 # include <sys/wait.h>
 # include <sys/types.h>
+# include <termios.h>
 
 # include "msh_builtins.h"
 
