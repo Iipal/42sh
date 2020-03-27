@@ -27,6 +27,7 @@ extern int	g_opt_dbg_level;
 // Store globally pid of each single child for handling SIGCHLD signal
 extern pid_t	g_child;
 
+// True - if current commands queue is piped
 extern bool	g_is_cq_piped;
 
 // Non-zero value if -f(--file) option was detected
@@ -37,5 +38,17 @@ extern FILE	*g_defout;
 
 // Initialize signal handlers
 void	init_sig_handlers(void);
+
+char	*cmd_readline(void);
+
+bool	cmd_parseline(char *restrict line,
+				struct command *restrict *restrict cq);
+char	*line_prepare(const char *restrict line);
+
+void	cmd_run(const size_t cq_length, struct command *restrict *restrict cq);
+void	cmd_solorun(const struct command *restrict cmd);
+void	cmd_pipe_queuing(const ssize_t isender,
+				const ssize_t ireceiver,
+				struct command *restrict *restrict cq);
 
 #endif /* MINISHELL_H */
