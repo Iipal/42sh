@@ -1,5 +1,7 @@
 #include "minishell.h"
 
+static struct termios	g_termios_save;
+
 #define CANON_MODE_MAX_LINE 4096
 
 static char	buff[CANON_MODE_MAX_LINE * 2] = { 0 };
@@ -10,9 +12,9 @@ typedef enum e_handler_state {
 	e_hs_exit = 1
 } __attribute__((packed)) handler_state_t;
 
-typedef handler_state_t	(*fsm_handler)(int);
+typedef handler_state_t	(*input_handler)(int);
 
-static inline handler_state_t	__fsm_space(int ch) {
+static inline handler_state_t	__ispace(int ch) {
 	(void)ch;
 	if (ibuff && ' ' != buff[ibuff - 1]) {
 		buff[ibuff++] = ' ';
@@ -20,16 +22,19 @@ static inline handler_state_t	__fsm_space(int ch) {
 	}
 	return e_hs_continue;
 }
-static inline handler_state_t	__fsm_end_line(int ch) {
+
+static inline handler_state_t	__iend_line(int ch) {
 	putchar(ch);
 	return e_hs_exit;
 }
-static inline handler_state_t	__fsm_printable(int ch) {
+
+static inline handler_state_t	__iprintable(int ch) {
 	buff[ibuff++] = ch;
 	putchar(ch);
 	return e_hs_continue;
 }
-static inline handler_state_t	__fsm_pipe(int ch) {
+
+static inline handler_state_t	__ipipe(int ch) {
 	g_is_cq_piped = true;
 	if (ibuff && ' ' != buff[ibuff - 1])
 		buff[ibuff++] = ' ';
@@ -38,7 +43,8 @@ static inline handler_state_t	__fsm_pipe(int ch) {
 	putchar(ch);
 	return e_hs_continue;
 }
-static inline handler_state_t	__fsm_del(int ch) {
+
+static inline handler_state_t	__idel(int ch) {
 	(void)ch;
 	if (ibuff) {
 		int	removed = buff[ibuff--];
@@ -52,7 +58,8 @@ static inline handler_state_t	__fsm_del(int ch) {
 	}
 	return e_hs_continue;
 }
-static inline handler_state_t	__fsm_home_path(int ch) {
+
+static inline handler_state_t	__ihome_path(int ch) {
 	(void)ch;
 	char *restrict	home = getpwuid(getuid())->pw_dir;
 
@@ -62,22 +69,20 @@ static inline handler_state_t	__fsm_home_path(int ch) {
 	return e_hs_continue;
 }
 
-# define KEY_PRINTABLE 32 ... 126
 # define KEY_DEL 127
 
-static const fsm_handler	__fsm_lt[] = {
-	['\t'] = __fsm_space,
-	['\n'] = __fsm_end_line,
-	['\v' ... '\r'] = __fsm_space,
-	[' '] = __fsm_space,
-	[33 ... 123] = __fsm_printable,
-	['|'] = __fsm_pipe,
-	['}'] = __fsm_printable,
-	['~'] = __fsm_home_path,
-	[KEY_DEL] = __fsm_del,
+// ilt - Input Lookup Table
+static const input_handler	__ilt[] = {
+	['\t'] = __ispace,
+	['\n'] = __iend_line,
+	['\v' ... '\r'] = __ispace,
+	[' '] = __ispace,
+	['!' ... '{'] = __iprintable,
+	['|'] = __ipipe,
+	['}'] = __iprintable,
+	['~'] = __ihome_path,
+	[KEY_DEL] = __idel,
 };
-
-static struct termios	g_termios_save;
 
 static void	input_disable_raw_mode(void) {
 	tcsetattr(STDIN_FILENO, TCSAFLUSH, &g_termios_save);
@@ -97,20 +102,18 @@ static inline void	input_raw_mode(void) {
 char	*cmd_readline(void) {
 	input_raw_mode();
 
-	fsm_handler	fsm = NULL;
+	input_handler	ih = NULL;
 	int	ch = 0;
 
+	ibuff = 0;
 	while (EOF != read(STDIN_FILENO, &ch, 1)) {
-		if ((fsm = __fsm_lt[ch]))
-			if (e_hs_exit == fsm(ch))
+		if ((ih = __ilt[ch]))
+			if (e_hs_exit == ih(ch))
 				break ;
 		buff[ibuff] = 0;
 	}
 
-	if (-1 == ch)
-		return (char*)-1;
-	char	*out;
-	assert(out = strndup(buff, ibuff));
-	ibuff = 0;
-	return out;
+	if (EOF == ch)
+		return (char*)EOF;
+	return strndup(buff, ibuff);
 }
