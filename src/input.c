@@ -89,21 +89,6 @@ static handler_state_t	__ipipe(struct s_input_state is) {
 	return e_hs_continue;
 }
 
-static handler_state_t	__idel(struct s_input_state is) {
-	(void)is;
-	if (ibuff) {
-		int	removed = buff[ibuff--];
-		if ('|' == removed) {
-			if (1 < g_cq_len)
-				--g_cq_len;
-			if (1 == g_cq_len)
-				g_is_cq_piped = false;
-		}
-		printf("\b \b");
-	}
-	return e_hs_continue;
-}
-
 static handler_state_t	__ihome_path(struct s_input_state is) {
 	(void)is;
 	char *restrict	home = getpwuid(getuid())->pw_dir;
@@ -145,6 +130,23 @@ static handler_state_t	__ictrl_j(struct s_input_state is) {
 	return e_hs_stop;
 }
 
+static handler_state_t	__ictrl_del(struct s_input_state is) {
+	(void)is;
+	if (ibuff) {
+		int	removed = buff[ibuff--];
+		if ('|' == removed) {
+			if (1 < g_cq_len)
+				--g_cq_len;
+			if (1 == g_cq_len)
+				g_is_cq_piped = false;
+		}
+		printf("\b \b");
+	}
+	buff[ibuff] = 0;
+	DBG_INFO("buff now: '%s'\n", buff);
+	return e_hs_continue;
+}
+
 /**
  *	Handle Escape Sequences
  */
@@ -172,14 +174,14 @@ static const input_handler *restrict	__ilt[] = {
 		['|'] = __ipipe,
 		['}'] = __iprintable,
 		['~'] = __ihome_path,
-		[KEY_DEL] = __idel,
+		[127] = NULL,
 	},
 	[e_is_ctrl] = (input_handler[]) {
 		[3 ... 4] = __ictrl_cd,
 		[10] = __ictrl_j,
 		[12] = __ictrl_l,
 		[17] = __ictrl_q,
-		[18 ... 127] = NULL
+		[KEY_DEL] = __ictrl_del
 	},
 	[e_is_seq] = (input_handler[]) { [0 ... 127] = __iseq },
 	[e_is_eof] = (input_handler[]) { [0 ... 127] = __ieof }
@@ -196,9 +198,7 @@ static inline void	debug_info(struct s_input_state is) {
 		DBG_INFO(" || %d", __ch);
 		if (!iscntrl(__ch))
 			DBG_INFO(" -- '%c'", __ch);
-		if (g_opt_dbg_level) {
-			putc('\n', stderr);
-		}
+		DBG_INFO(" < (%d)\n", is.state);
 	}
 }
 
