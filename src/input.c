@@ -66,8 +66,9 @@ static handler_state_t	__ispace(struct s_input_state is) {
 	return e_hs_continue;
 }
 
-static handler_state_t	__iend_line(struct s_input_state is) {
-	putchar(is.ch[0]);
+static handler_state_t	__inew_line(struct s_input_state is) {
+	(void)is;
+	putchar('\n');
 	return e_hs_stop;
 }
 
@@ -124,12 +125,6 @@ static handler_state_t	__ictrl_q(struct s_input_state is) {
 	return e_hs_exit;
 }
 
-static handler_state_t	__ictrl_j(struct s_input_state is) {
-	(void)is;
-	putchar('\n');
-	return e_hs_stop;
-}
-
 static handler_state_t	__ictrl_del(struct s_input_state is) {
 	(void)is;
 	if (ibuff) {
@@ -167,7 +162,7 @@ static handler_state_t	__ieof(struct s_input_state is) {
 static const input_handler *restrict	__ilt[] = {
 	[e_is_char] = (input_handler[]) {
 		['\t'] = __ispace,
-		['\n'] = __iend_line,
+		['\n'] = __inew_line,
 		['\v' ... '\r'] = __ispace,
 		[' '] = __ispace,
 		['!' ... '{'] = __iprintable,
@@ -177,11 +172,11 @@ static const input_handler *restrict	__ilt[] = {
 		[127] = NULL,
 	},
 	[e_is_ctrl] = (input_handler[]) {
-		[3 ... 4] = __ictrl_cd,
-		[10] = __ictrl_j,
-		[12] = __ictrl_l,
-		[17] = __ictrl_q,
-		[KEY_DEL] = __ictrl_del
+		[3 ... 4] = __ictrl_cd, // Ctrl+C, Ctrl+D
+		[10] = __inew_line,     // Ctrl+J
+		[12] = __ictrl_l,       // Ctrl+L
+		[17] = __ictrl_q,       // Ctrl+Q
+		[KEY_DEL] = __ictrl_del // DEL
 	},
 	[e_is_seq] = (input_handler[]) { [0 ... 127] = __iseq },
 	[e_is_eof] = (input_handler[]) { [0 ... 127] = __ieof }
