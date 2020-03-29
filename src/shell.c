@@ -15,12 +15,15 @@ static inline void	cq_free(void) {
 static inline void	shell_refresh_global_data(void) {
 	g_is_cq_piped = false;
 	g_child = 0;
-	g_cq = NULL;
+	if (g_cq) {
+		cq_free();
+		g_cq = NULL;
+	}
 	g_cq_len = 1;
 }
 
-static inline bool	cmd_parseline(char *restrict line,
-				struct command *restrict *restrict cq) {
+static inline bool	line_tokenize_to_cq(char *restrict line,
+					struct command *restrict *restrict cq) {
 	struct command *restrict	c = NULL;
 	size_t	cq_iter = 0;
 	char	*save = NULL;
@@ -40,26 +43,29 @@ static inline bool	cmd_parseline(char *restrict line,
 }
 
 void	shell(void) {
+	char *restrict	line;
 	while (1) {
 		shell_refresh_global_data();
-
-		char *restrict	line;
 		fprintf(g_defout, "$> ");
-		if ((char*)-1 == (line = cmd_readline())) {
+		line = input_read();
+
+		if (INPUT_EOF == line) {
 			rewind(stdin);
 			fwrite("\n", sizeof(char), 1, g_defout);
 			continue ;
-		}
-		if (!line)
+		} else if (INPUT_EXIT == line) {
+			break ;
+		} else if (INPUT_CONTINUE == line) {
 			continue ;
+		}
+
 		if (g_opt_stdout_redir)
 			printf("$> %s\n", line);
 
 		assert(g_cq = calloc(g_cq_len + 1, sizeof(*g_cq)));
-		if (!cmd_parseline(line, g_cq))
+		if (!line_tokenize_to_cq(line, g_cq))
 			continue ;
 		cmd_run(g_cq_len, g_cq);
-		cq_free();
 		free(line);
 	}
 }

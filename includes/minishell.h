@@ -49,7 +49,11 @@ void	init_sig_handlers(void);
 
 void	shell(void);
 
-char	*cmd_readline(void);
+# define INPUT_EOF      ((char*)-1)
+# define INPUT_EXIT     ((char*)-2)
+# define INPUT_CONTINUE NULL
+
+char	*input_read(void);
 
 void	cmd_run(const size_t cq_length, struct command *restrict *restrict cq);
 void	cmd_solorun(const struct command *restrict cmd);
