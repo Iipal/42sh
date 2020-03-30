@@ -1,0 +1,3 @@
+[submodule "libs/libdll"]
+	path = libs/libdll
+	url = https://github.com/Iipal/libdll.git
