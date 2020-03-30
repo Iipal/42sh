@@ -22,7 +22,7 @@ endif
 
 # Set for include and to parse additional library headers dependencies.
 # Set only parent-folder for all headers, all sub-dirs will be added automatically.
-HEADER_DEPS :=
+HEADER_DEPS := ./libs/libdll
 ifneq (,$(HEADER_DEPS))
 # Checks if each path in HEADER_DEPS is valid.
  ifneq (,$(filter-out $(foreach dep,$(HEADER_DEPS),$(wildcard $(dep))),$(HEADER_DEPS)))
@@ -37,6 +37,9 @@ ifneq (,$(wildcard ./libs))
 LIBS_DIRS  := $(abspath $(filter-out ./libs,$(shell find ./libs -maxdepth 1 -type d)))
 LIBS_NAMES := $(join $(LIBS_DIRS),$(addsuffix .a,$(addprefix /,$(notdir $(LIBS_DIRS)))))
 endif
+# Ignore finded libdll because it's header-only library
+LIBS_DIRS :=
+LIBS_NAMES :=
 
 # Compiler settings.
 CC     := clang
