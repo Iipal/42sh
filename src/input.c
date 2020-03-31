@@ -11,30 +11,20 @@ static size_t	ibuff = 0;
 static size_t	ilword = 0;
 static struct s_token_key	*lkey = NULL;
 
-# define get_lkey(dll_obj) dll_getdata(struct s_token_key*, (dll_obj))
+# define get_key(_obj) ((struct s_token_key*)dll_getdata(_obj))
 
 # define KEY_DEL 0x7f
 # define KEY_ESC 0x1b
 # define KEY_CTRL(k) ((k) & 0x1f)
 
-static handler_state_t	__itoken_last_word(struct s_input_state *restrict is,
-		handler_state_t ret_state) {
+static handler_state_t	__itoken_last_word(struct s_input_state *restrict is) {
 	if (ilword >= ibuff)
-		return ret_state;
+		return HS_STOP;
 
-	size_t	last_len = ilword - ibuff;
-
+	size_t	last_len = ibuff - ilword;
 	if (1 == last_len) {
-		if (' ' == buff[ibuff])
-			return ret_state;
-		else
-			buff[ibuff--] = 0;
-	}
-	if (' ' == buff[ibuff]) {
-		if (1 == last_len)
-			return ret_state;
-		else
-			buff[ibuff--] = 0;
+		if (' ' == buff[ilword] || '|' == buff[ilword] || ';' == buff[ilword])
+			return HS_STOP;
 	}
 
 	char *restrict str;
@@ -44,8 +34,8 @@ static handler_state_t	__itoken_last_word(struct s_input_state *restrict is,
 	struct s_token_key	tk = { str, last_len, tk_type };
 
 	if (!dll_getlast(is->tokens)) {
-		lkey = get_lkey(dll_pushback(is->tokens, &tk, sizeof(tk), TK_DLL_BITS));
-		return ret_state;
+		lkey = get_key(dll_pushback(is->tokens, &tk, sizeof(tk), TK_DLL_BITS));
+		return HS_STOP;
 	}
 	switch (lkey->type) {
 		case TK_OPT:
@@ -55,11 +45,12 @@ static handler_state_t	__itoken_last_word(struct s_input_state *restrict is,
 		case TK_REDIR:
 		case TK_REDIR_APP: tk_type = TK_REDIR_DST; break ;
 		case TK_REDIR_DST:
+		case TK_MULTI_CMD:
 		default: tk_type = TK_EXEC; break ;
 	}
 	tk.type = tk_type;
-	lkey = get_lkey(dll_pushback(is->tokens, &tk, sizeof(tk), TK_DLL_BITS));
-	return ret_state;
+	lkey = get_key(dll_pushback(is->tokens, &tk, sizeof(tk), TK_DLL_BITS));
+	return HS_STOP;
 }
 
 /**
@@ -68,17 +59,17 @@ static handler_state_t	__itoken_last_word(struct s_input_state *restrict is,
 static handler_state_t	__ispace(struct s_input_state *restrict is) {
 	(void)is;
 	if (ibuff && ' ' != buff[ibuff - 1]) {
-		__itoken_last_word(is, HS_CONTINUE);
+		putchar(' ');
+		__itoken_last_word(is);
 		buff[ibuff++] = ' ';
 		ilword = ibuff;
-		putchar(' ');
 	}
 	return HS_CONTINUE;
 }
 
 static handler_state_t	__inew_line(struct s_input_state *restrict is) {
 	putchar('\n');
-	return __itoken_last_word(is, HS_STOP);
+	return __itoken_last_word(is);
 }
 
 static handler_state_t	__iprintable(struct s_input_state *restrict is) {
@@ -90,29 +81,52 @@ static handler_state_t	__iprintable(struct s_input_state *restrict is) {
 }
 
 static handler_state_t	__iredir(struct s_input_state *restrict is) {
+	putchar(is->ch[0]);
 	if (TK_REDIR == lkey->type) {
 		lkey->type = TK_REDIR_APP;
-		return HS_CONTINUE;
+	} else if (TK_REDIR_APP == lkey->type) {
+		dll_popback(is->tokens);
+		__itoken_last_word(is);
+	} else {
+		struct s_token_key	tk = { NULL, 0, TK_REDIR };
+		lkey = get_key(dll_pushback(is->tokens, &tk, sizeof(tk), TK_DLL_BITS));
 	}
-	struct s_token_key	tk = { NULL, 0, TK_REDIR };
-	lkey = get_lkey(dll_pushback(is->tokens, &tk, sizeof(tk), TK_DLL_BITS));
-	DBG_INFO(" .redir: %d -- '%c'\n", is->ch[0], is->ch[0]);
 	return HS_CONTINUE;
 }
 
-
 static handler_state_t	__ipipe(struct s_input_state *restrict is) {
+	if (ibuff && ' ' != buff[ibuff - 1])
+		__ispace(is);
+
 	dll_obj_t *restrict last = dll_getlast(is->tokens);
 	dll_obj_t *restrict lprev = dll_getprev(last);
-	if (TK_PIPE == dll_getdata(struct s_token_key*, last)->type
-	&& TK_PIPE == dll_getdata(struct s_token_key*, lprev)->type)
+	if (TK_PIPE == get_key(last)->type && TK_PIPE == get_key(lprev)->type)
 		return HS_CONTINUE;
 
+	putchar('|');
+	buff[ibuff++] = '|';
+
 	struct s_token_key	tk = { NULL, 0, TK_PIPE };
-	lkey = get_lkey(dll_pushback(is->tokens, &tk, sizeof(tk), TK_DLL_BITS));
-	buff[ibuff++] = is->ch[0];
-	putchar(is->ch[0]);
-	return HS_CONTINUE;
+	lkey = get_key(dll_pushback(is->tokens, &tk, sizeof(tk), TK_DLL_BITS));
+	return __ispace(is);
+}
+
+static handler_state_t	__imulticmd(struct s_input_state *restrict is) {
+	if (ibuff && ' ' != buff[ibuff - 1])
+		__ispace(is);
+
+	dll_obj_t *restrict last = dll_getlast(is->tokens);
+	dll_obj_t *restrict lprev = dll_getprev(last);
+	if (TK_MULTI_CMD == get_key(last)->type
+	&& TK_MULTI_CMD == get_key(lprev)->type)
+		return HS_CONTINUE;
+
+	putchar(';');
+	buff[ibuff++] = ';';
+
+	struct s_token_key	tk = { NULL, 0, TK_MULTI_CMD };
+	lkey = get_key(dll_pushback(is->tokens, &tk, sizeof(tk), TK_DLL_BITS));
+	return __ispace(is);
 }
 
 static handler_state_t	__ihome_path(struct s_input_state *restrict is) {
@@ -126,10 +140,18 @@ static handler_state_t	__ihome_path(struct s_input_state *restrict is) {
 }
 
 static handler_state_t	__idelch(struct s_input_state *restrict is) {
-	(void)is;
-	if (ibuff) {
-		buff[--ibuff] = 0;
-		printf("\b \b");
+	if (!ibuff)
+		return HS_CONTINUE;
+	printf("\b \b");
+	char	removed = buff[ibuff - 1];
+	char	prev_ch = ((ibuff - 2) ? buff[ibuff - 2] : 0);
+	buff[--ibuff] = 0;
+	if (' ' == removed && prev_ch) {
+		dll_popback(is->tokens);
+		if (dll_getlast(is->tokens))
+			lkey = get_key(dll_getlast(is->tokens));
+		char	*last_word = strrchr(buff, ' ');
+		ilword = ((last_word) ? (buff - last_word) : 0);
 	}
 	return HS_CONTINUE;
 }
@@ -140,7 +162,8 @@ static handler_state_t	__idelch(struct s_input_state *restrict is) {
 static handler_state_t	__ictrl_cd(struct s_input_state *restrict is) {
 	(void)is;
 	ibuff = 0;
-	return HS_STOP;
+	printf("\n$> ");
+	return HS_CONTINUE;
 }
 
 static handler_state_t	__ictrl_l(struct s_input_state *restrict is) {
@@ -154,7 +177,8 @@ static handler_state_t	__ictrl_l(struct s_input_state *restrict is) {
 
 static handler_state_t	__ictrl_q(struct s_input_state *restrict is) {
 	(void)is;
-	printf("exit\n");
+	if (!ibuff)
+		printf("exit\n");
 	return HS_EXIT;
 }
 
@@ -181,7 +205,9 @@ static const input_handler *restrict	__ilt[] = {
 		['\n'] = __inew_line,
 		['\v' ... '\r'] = __ispace,
 		[' '] = __ispace,
-		['!' ... '='] = __iprintable,
+		['!' ... ':'] = __iprintable,
+		[';'] = __imulticmd,
+		['<' ... '=' ] = __iprintable,
 		['>'] = __iredir,
 		['?' ... '{'] = __iprintable,
 		['|'] = __ipipe,
@@ -257,7 +283,7 @@ run_key_handler(struct s_input_state *restrict is) {
 }
 
 dll_t	*input_read(void) {
-	handler_state_t	s = HS_CONTINUE;
+	handler_state_t	input_ret = HS_CONTINUE;
 	struct s_input_state	is;
 	is.tokens = dll_init(DLL_GBIT_QUIET);
 
@@ -266,12 +292,12 @@ dll_t	*input_read(void) {
 	ibuff = 0;
 	ilword = 0;
 	lkey = NULL;
-	while (HS_CONTINUE == (s = run_key_handler(key_read(&is))))
+	while (HS_CONTINUE == (input_ret = run_key_handler(key_read(&is))))
 		;
 
 	input_disable_raw_mode();
 
-	switch (s) {
+	switch (input_ret) {
 		case HS_STOP: {
 			if (!ibuff)
 				return INPUT_CONTINUE;
