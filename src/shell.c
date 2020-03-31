@@ -18,19 +18,23 @@ static inline void	cq_free(struct command_queue *restrict cq) {
 
 static inline struct command_queue	*tokens_to_cq(dll_t *restrict tokens) {
 	static dll_obj_t *restrict	last_obj;
-	struct command_queue	*cq;
-	struct command *restrict	icmd = NULL;
 	dll_obj_t *restrict iobj =
 		((!tokens) ? last_obj : (last_obj = tokens->head));
-
 	if (!iobj)
 		return NULL;
+
+	struct command_queue *restrict	cq = NULL;
+	struct command *restrict	icmd = NULL;
+	struct s_token_key *restrict	k = NULL;
+	char *restrict	env_var_temp = NULL;
+
 	assert(cq = calloc(1, sizeof(*cq)));
-	cq->size = 1;
+	assert(cq->cmd = calloc(2, sizeof(*cq->cmd)));
 	cq->type = CQ_DEFAULT;
-	assert(cq->cmd = calloc(cq->size, sizeof(*cq->cmd)));
+	cq->size = 1;
+
 	while (iobj) {
-		struct s_token_key *restrict	k = dll_getdata(iobj);
+		k = dll_getdata(iobj);
 		if (TK_PIPE == k->type) {
 			cq->type = CQ_PIPE;
 			++cq->size;
@@ -39,15 +43,23 @@ static inline struct command_queue	*tokens_to_cq(dll_t *restrict tokens) {
 		} else if (TK_MULTI_CMD == k->type) {
 			last_obj = iobj->next;
 			break ;
+		} else if (TK_ENV_VAR == k->type) {
+			env_var_temp = getenv(k->str + 1);
 		}
+
 		if (!cq->cmd[cq->size - 1]) {
 			assert(icmd = cq->cmd[cq->size - 1] =
-				calloc(cq->size, sizeof(icmd)));
+				calloc(cq->size + 1, sizeof(icmd)));
 		}
-		assert(icmd->argv = realloc(icmd->argv,
-			sizeof(*icmd->argv) * icmd->argc + 2));
-		assert(icmd->argv[icmd->argc++] = strdup(k->str));
-		icmd->argv[icmd->argc] = NULL;
+		assert(icmd->argv =
+			realloc(icmd->argv, sizeof(*icmd->argv) * (icmd->argc + 2)));
+		if (env_var_temp) {
+			assert(icmd->argv[icmd->argc] = strdup(env_var_temp));
+			env_var_temp = NULL;
+		} else {
+			assert(icmd->argv[icmd->argc] = strdup(k->str));
+		}
+		icmd->argv[++icmd->argc] = NULL;
 		last_obj = iobj = iobj->next;
 	};
 	return cq;
@@ -55,7 +67,7 @@ static inline struct command_queue	*tokens_to_cq(dll_t *restrict tokens) {
 
 static int	print_token(const void *restrict data) {
 	static const char	*tk_str_types[] = {
-		"EXEC", "OPT", "ARG", "PIPE", "REDIR", "REDIRA", "REDIRD", "SEMI"
+		"EXEC", "OPT", "ARG", "PIPE", "REDIR", "REDIRA", "REDIRD", "SEMI", "ENV"
 	};
 	const struct s_token_key *restrict	tk = data;
 
