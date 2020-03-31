@@ -17,6 +17,12 @@ static struct s_token_key	*lkey = NULL;
 # define KEY_ESC 0x1b
 # define KEY_CTRL(k) ((k) & 0x1f)
 
+static void	__dlldel_token(void *restrict key) {
+	struct s_token_key *restrict	k = key;
+	free(k->str);
+	free(k);
+}
+
 static handler_state_t	__itoken_last_word(struct s_input_state *restrict is) {
 	if (ilword >= ibuff)
 		return HS_STOP;
@@ -30,26 +36,30 @@ static handler_state_t	__itoken_last_word(struct s_input_state *restrict is) {
 	char *restrict str;
 	assert((str = strndup(buff + ilword, last_len)));
 
-	tk_type_t	tk_type = TK_EXEC;
+	tk_type_t	tk_type = (('$' == *str) ? TK_ENV_VAR : TK_EXEC);
 	struct s_token_key	tk = { str, last_len, tk_type };
+	const bool	force_push = (('$' == *str) || !dll_getlast(is->tokens));
 
-	if (!dll_getlast(is->tokens)) {
-		lkey = get_key(dll_pushback(is->tokens, &tk, sizeof(tk), TK_DLL_BITS));
+	if (force_push) {
+		lkey = get_key(dll_pushback(is->tokens, &tk, sizeof(tk),
+			TK_DLL_BITS, __dlldel_token));
 		return HS_STOP;
 	}
 	switch (lkey->type) {
 		case TK_OPT:
 		case TK_EXEC: tk_type = (('-' == *str) ? TK_OPT : TK_ARG); break ;
-		case TK_ARG: tk_type = TK_ARG; break ;
-		case TK_PIPE: tk_type = TK_EXEC; break ;
+		case TK_ARG:
+		case TK_ENV_VAR: tk_type = TK_ARG; break ;
 		case TK_REDIR:
 		case TK_REDIR_APP: tk_type = TK_REDIR_DST; break ;
+		case TK_PIPE:
 		case TK_REDIR_DST:
 		case TK_MULTI_CMD:
 		default: tk_type = TK_EXEC; break ;
 	}
 	tk.type = tk_type;
-	lkey = get_key(dll_pushback(is->tokens, &tk, sizeof(tk), TK_DLL_BITS));
+	lkey = get_key(dll_pushback(is->tokens, &tk, sizeof(tk),
+		TK_DLL_BITS, __dlldel_token));
 	return HS_STOP;
 }
 
@@ -89,7 +99,8 @@ static handler_state_t	__iredir(struct s_input_state *restrict is) {
 		__itoken_last_word(is);
 	} else {
 		struct s_token_key	tk = { NULL, 0, TK_REDIR };
-		lkey = get_key(dll_pushback(is->tokens, &tk, sizeof(tk), TK_DLL_BITS));
+		lkey = get_key(dll_pushback(is->tokens, &tk, sizeof(tk),
+			TK_DLL_BITS, __dlldel_token));
 	}
 	return HS_CONTINUE;
 }
@@ -107,7 +118,8 @@ static handler_state_t	__ipipe(struct s_input_state *restrict is) {
 		__ispace(is);
 	putchar('|');
 	buff[ibuff++] = '|';
-	lkey = get_key(dll_pushback(is->tokens, &tk, sizeof(tk), TK_DLL_BITS));
+	lkey = get_key(dll_pushback(is->tokens, &tk, sizeof(tk),
+		TK_DLL_BITS, __dlldel_token));
 	return __ispace(is);
 }
 
@@ -124,7 +136,8 @@ static handler_state_t	__imulticmd(struct s_input_state *restrict is) {
 		__ispace(is);
 	putchar(';');
 	buff[ibuff++] = ';';
-	lkey = get_key(dll_pushback(is->tokens, &tk, sizeof(tk), TK_DLL_BITS));
+	lkey = get_key(dll_pushback(is->tokens, &tk, sizeof(tk),
+		TK_DLL_BITS, __dlldel_token));
 	return __ispace(is);
 }
 

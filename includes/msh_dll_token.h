@@ -24,8 +24,10 @@ typedef enum e_token_type {
 # define TK_REDIR_APP TK_REDIR_APP
 	TK_REDIR_DST, // mark next token after TK_REDIR or TK_REDIR_APP
 # define TK_REDIR_DST TK_REDIR_DST
-	TK_MULTI_CMD // mark token contaion ';'
+	TK_MULTI_CMD, // mark token contaion ';'
 # define TK_MULTI_CMD TK_MULTI_CMD
+	TK_ENV_VAR // mark token starts with '$'
+# define TK_ENV_VAR TK_ENV_VAR
 } msh_attr_pack tk_type_t;
 
 struct s_token_key {
