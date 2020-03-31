@@ -18,9 +18,8 @@ void	parse_options(int ac, char *const *av) {
 	}
 	if (g_opt_help) {
 		printf("Mini-Shell help:\n"
-"\t-d(--debug)\toutput additional debug information to stderr\n"
-"\t-f(--file) \tre-direct stdout to ./.msh.out (not applicable to builtins)\n"
-"\t-h(--help) \tprint this info message and exit\n");
+			"\t-d(--debug)\toutput additional debug information to stderr\n"
+			"\t-h(--help) \tprint this info message and exit\n");
 		cmd_fast_builtinrun(CMD_FAST_NEW(1, "help", NULL));
 		exit(EXIT_SUCCESS);
 	}
