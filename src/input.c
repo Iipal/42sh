@@ -1,191 +1,209 @@
 #include "minishell.h"
 
-static struct termios	g_termios_save;
+#define MSH_RAW_MODE_H
+#include "msh_raw_mode.h"
+#undef MSH_RAW_MODE_H
 
-static void	input_disable_raw_mode(void) {
-	tcsetattr(STDIN_FILENO, TCSAFLUSH, &g_termios_save);
-}
-
-static inline void	input_raw_mode(void) {
-	tcgetattr(STDIN_FILENO, &g_termios_save);
-
-	struct termios	raw = g_termios_save;
-	raw.c_iflag &= ~(ISTRIP | INPCK | IXON);
-	raw.c_lflag &= ~(ICANON | ISIG | IEXTEN | ECHO);
-	raw.c_lflag |= (ECHONL | ECHOE | ECHOK);
-	raw.c_cflag |= (CS8);
-	raw.c_cc[VMIN] = 0;
-	raw.c_cc[VTIME] = 1;
-	tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
-
-	atexit(input_disable_raw_mode);
-}
-
-#define INPUT_BUFF_SIZE 1024
+#define INPUT_BUFF_SIZE 8096
 
 static char	buff[INPUT_BUFF_SIZE] = { 0 };
 static size_t	ibuff = 0;
+static size_t	ilword = 0;
+static struct s_token_key	*lkey = NULL;
+
+# define get_lkey(dll_obj) dll_getdata(struct s_token_key*, (dll_obj))
 
 # define KEY_DEL 0x7f
 # define KEY_ESC 0x1b
 # define KEY_CTRL(k) ((k) & 0x1f)
 
-//	hs == handler state from Input Lookup State[]
-typedef enum e_handler_state {
-	e_hs_continue = 0, // All input
-	e_hs_stop,         // Ctrl+D, Ctrl+C or '\n'
-	e_hs_exit,         // Ctrl+Q
-	e_hs_eof           // read() error
-} __attribute__((packed)) handler_state_t;
+static handler_state_t	__itoken_last_word(struct s_input_state *restrict is,
+		handler_state_t ret_state) {
+	if (ilword >= ibuff)
+		return ret_state;
 
-//	is == input state from key_read()
-typedef enum e_input_state {
-	e_is_char = 0, // Single character input
-	e_is_ctrl,     // Character pressed with Ctrl
-	e_is_seq,      // Escape Sequence
-	e_is_eof,      // read() error
-} __attribute__((packed)) input_state_t;
+	size_t	last_len = ilword - ibuff;
 
-struct s_input_state {
-	char	ch[4];
-	input_state_t	state;
-	char	__dummy_align[3] __attribute__((deprecated, unused));
-} __attribute__((aligned(8)));
+	if (1 == last_len) {
+		if (' ' == buff[ibuff])
+			return ret_state;
+		else
+			buff[ibuff--] = 0;
+	}
+	if (' ' == buff[ibuff]) {
+		if (1 == last_len)
+			return ret_state;
+		else
+			buff[ibuff--] = 0;
+	}
 
-typedef handler_state_t	(*input_handler)(struct s_input_state);
+	char *restrict str;
+	assert((str = strndup(buff + ilword, last_len)));
+
+	tk_type_t	tk_type = TK_EXEC;
+	struct s_token_key	tk = { str, last_len, tk_type };
+
+	if (!dll_getlast(is->tokens)) {
+		lkey = get_lkey(dll_pushback(is->tokens, &tk, sizeof(tk), TK_DLL_BITS));
+		return ret_state;
+	}
+	switch (lkey->type) {
+		case TK_OPT:
+		case TK_EXEC: tk_type = (('-' == *str) ? TK_OPT : TK_ARG); break ;
+		case TK_ARG: tk_type = TK_ARG; break ;
+		case TK_PIPE: tk_type = TK_EXEC; break ;
+		case TK_REDIR:
+		case TK_REDIR_APP: tk_type = TK_REDIR_DST; break ;
+		case TK_REDIR_DST:
+		default: tk_type = TK_EXEC; break ;
+	}
+	tk.type = tk_type;
+	lkey = get_lkey(dll_pushback(is->tokens, &tk, sizeof(tk), TK_DLL_BITS));
+	return ret_state;
+}
 
 /**
  *	Handle key presses
  */
-static handler_state_t	__ispace(struct s_input_state is) {
+static handler_state_t	__ispace(struct s_input_state *restrict is) {
 	(void)is;
 	if (ibuff && ' ' != buff[ibuff - 1]) {
+		__itoken_last_word(is, HS_CONTINUE);
 		buff[ibuff++] = ' ';
+		ilword = ibuff;
 		putchar(' ');
 	}
-	return e_hs_continue;
+	return HS_CONTINUE;
 }
 
-static handler_state_t	__inew_line(struct s_input_state is) {
-	(void)is;
+static handler_state_t	__inew_line(struct s_input_state *restrict is) {
 	putchar('\n');
-	return e_hs_stop;
+	return __itoken_last_word(is, HS_STOP);
 }
 
-static handler_state_t	__iprintable(struct s_input_state is) {
-	char	ch = is.ch[0];
-	buff[ibuff++] = ch;
-	putchar(ch);
-	return e_hs_continue;
+static handler_state_t	__iprintable(struct s_input_state *restrict is) {
+	if (' ' == buff[ibuff])
+		ilword = ibuff + 1;
+	buff[ibuff++] = is->ch[0];
+	putchar(is->ch[0]);
+	return HS_CONTINUE;
 }
 
-static handler_state_t	__ipipe(struct s_input_state is) {
-	char	ch = is.ch[0];
-	g_is_cq_piped = true;
-	if (ibuff && ' ' != buff[ibuff - 1])
-		buff[ibuff++] = ' ';
-	buff[ibuff++] = ch;
-	++g_cq_len;
-	putchar(ch);
-	return e_hs_continue;
+static handler_state_t	__iredir(struct s_input_state *restrict is) {
+	if (TK_REDIR == lkey->type) {
+		lkey->type = TK_REDIR_APP;
+		return HS_CONTINUE;
+	}
+	struct s_token_key	tk = { NULL, 0, TK_REDIR };
+	lkey = get_lkey(dll_pushback(is->tokens, &tk, sizeof(tk), TK_DLL_BITS));
+	DBG_INFO(" .redir: %d -- '%c'\n", is->ch[0], is->ch[0]);
+	return HS_CONTINUE;
 }
 
-static handler_state_t	__ihome_path(struct s_input_state is) {
+
+static handler_state_t	__ipipe(struct s_input_state *restrict is) {
+	dll_obj_t *restrict last = dll_getlast(is->tokens);
+	dll_obj_t *restrict lprev = dll_getprev(last);
+	if (TK_PIPE == dll_getdata(struct s_token_key*, last)->type
+	&& TK_PIPE == dll_getdata(struct s_token_key*, lprev)->type)
+		return HS_CONTINUE;
+
+	struct s_token_key	tk = { NULL, 0, TK_PIPE };
+	lkey = get_lkey(dll_pushback(is->tokens, &tk, sizeof(tk), TK_DLL_BITS));
+	buff[ibuff++] = is->ch[0];
+	putchar(is->ch[0]);
+	return HS_CONTINUE;
+}
+
+static handler_state_t	__ihome_path(struct s_input_state *restrict is) {
 	(void)is;
 	char *restrict	home = getpwuid(getuid())->pw_dir;
 
 	strcpy(buff + ibuff, home);
 	printf("%s", buff + ibuff);
 	ibuff += strlen(home);
-	return e_hs_continue;
+	return HS_CONTINUE;
+}
+
+static handler_state_t	__idelch(struct s_input_state *restrict is) {
+	(void)is;
+	if (ibuff) {
+		buff[--ibuff] = 0;
+		printf("\b \b");
+	}
+	return HS_CONTINUE;
 }
 
 /**
  *	Handle keys what pressed with Ctrl
  */
-static handler_state_t	__ictrl_cd(struct s_input_state is) {
+static handler_state_t	__ictrl_cd(struct s_input_state *restrict is) {
 	(void)is;
 	ibuff = 0;
-	return e_hs_stop;
+	return HS_STOP;
 }
 
-static handler_state_t	__ictrl_l(struct s_input_state is) {
+static handler_state_t	__ictrl_l(struct s_input_state *restrict is) {
 	(void)is;
-	fprintf(g_defout, "\x1b[2J");
-	fprintf(g_defout, "\x1b[H");
-	fprintf(g_defout, "$> ");
-	for (size_t i = 0; ibuff > i; ++i)
-		fwrite(&buff[i], sizeof(buff[i]), 1, g_defout);
-	return e_hs_continue;
+	printf("\x1b[2J");
+	printf("\x1b[H");
+	printf("$> ");
+	fwrite(buff, ibuff, sizeof(char), stdout);
+	return HS_CONTINUE;
 }
 
-static handler_state_t	__ictrl_q(struct s_input_state is) {
+static handler_state_t	__ictrl_q(struct s_input_state *restrict is) {
 	(void)is;
-	fprintf(g_defout, "exit\n");
-	return e_hs_exit;
-}
-
-static handler_state_t	__ictrl_del(struct s_input_state is) {
-	(void)is;
-	if (ibuff) {
-		int	removed = buff[ibuff--];
-		if ('|' == removed) {
-			if (1 < g_cq_len)
-				--g_cq_len;
-			if (1 == g_cq_len)
-				g_is_cq_piped = false;
-		}
-		printf("\b \b");
-	}
-	buff[ibuff] = 0;
-	DBG_INFO("buff now: '%s'\n", buff);
-	return e_hs_continue;
+	printf("exit\n");
+	return HS_EXIT;
 }
 
 /**
  *	Handle Escape Sequences
  */
-static handler_state_t	__iseq(struct s_input_state is) {
-	DBG_INFO(" .SEQ: %d - '%c'\n", is.ch[2], is.ch[2]);
-	return e_hs_continue;
+static handler_state_t	__iseq(struct s_input_state *restrict is) {
+	DBG_INFO(" .SEQ: %d - '%c'\n", is->ch[2], is->ch[2]);
+	return HS_CONTINUE;
 };
 
 /**
  *	Handle all invalid input from read()
  */
-static handler_state_t	__ieof(struct s_input_state is) {
+static handler_state_t	__ieof(struct s_input_state *restrict is) {
 	(void)is;
-	return e_hs_eof;
+	return HS_EOF;
 };
 
 // ilt - Input Lookup Table
 static const input_handler *restrict	__ilt[] = {
-	[e_is_char] = (input_handler[]) {
+	[IS_CHAR] = (input_handler[]) {
 		['\t'] = __ispace,
 		['\n'] = __inew_line,
 		['\v' ... '\r'] = __ispace,
 		[' '] = __ispace,
-		['!' ... '{'] = __iprintable,
+		['!' ... '='] = __iprintable,
+		['>'] = __iredir,
+		['?' ... '{'] = __iprintable,
 		['|'] = __ipipe,
 		['}'] = __iprintable,
 		['~'] = __ihome_path,
-		[127] = NULL,
+		[KEY_DEL] = __idelch,
 	},
-	[e_is_ctrl] = (input_handler[]) {
-		[3 ... 4] = __ictrl_cd, // Ctrl+C, Ctrl+D
-		[10] = __inew_line,     // Ctrl+J
-		[12] = __ictrl_l,       // Ctrl+L
-		[17] = __ictrl_q,       // Ctrl+Q
-		[KEY_DEL] = __ictrl_del // DEL
+	[IS_CTRL] = (input_handler[]) {
+		[KEY_CTRL('C') ... KEY_CTRL('D')] = __ictrl_cd, // Ctrl+C, Ctrl+D
+		[KEY_CTRL('J')] = __inew_line, // Ctrl+J
+		[KEY_CTRL('L')] = __ictrl_l,   // Ctrl+L
+		[KEY_CTRL('Q')] = __ictrl_q,   // Ctrl+Q
+		[KEY_DEL] = __idelch // DEL
 	},
-	[e_is_seq] = (input_handler[]) { [0 ... 127] = __iseq },
-	[e_is_eof] = (input_handler[]) { [0 ... 127] = __ieof }
+	[IS_SEQ] = (input_handler[]) { [0 ... 127] = __iseq },
+	[IS_EOF] = (input_handler[]) { [0 ... 127] = __ieof }
 };
 
-static inline void	debug_info(struct s_input_state is) {
-	int i = 0;
-	while (is.ch[i]) {
-		int	ch = is.ch[i++];
+static inline void	debug_info(struct s_input_state *restrict is) {
+	int i = -1;
+	while (4 > ++i && is->ch[i]) {
+		int	ch = is->ch[i];
 		int	__ch = KEY_CTRL(ch);
 		DBG_INFO(" -> %d", ch);
 		if (!iscntrl(ch))
@@ -193,41 +211,42 @@ static inline void	debug_info(struct s_input_state is) {
 		DBG_INFO(" || %d", __ch);
 		if (!iscntrl(__ch))
 			DBG_INFO(" -- '%c'", __ch);
-		DBG_INFO(" < (%d)\n", is.state);
+		DBG_INFO(" < (%d)\n", is->state);
 	}
 }
 
-static inline struct s_input_state	key_read(void) {
+static inline struct s_input_state
+*key_read(struct s_input_state *restrict is) {
 	ssize_t	nread = 0;
-	struct s_input_state	is;
 
-	*((int*)is.ch) = 0;
-	is.state = e_is_char;
-	while (1 != (nread = read(STDIN_FILENO, &is.ch[0], 1))) {
+	*((int*)is->ch) = 0;
+	is->state = IS_CHAR;
+	while (1 != (nread = read(STDIN_FILENO, &is->ch[0], 1))) {
 		if (-1 == nread) {
 			if (EAGAIN == errno) {
 				err(EXIT_FAILURE, "read");
 			} else {
-				is.state = e_is_eof;
+				is->state = IS_EOF;
 				return is;
 			}
 		}
 	}
-	if (iscntrl(is.ch[0]))
-		is.state = e_is_ctrl;
-	if ('\x1b' == is.ch[0]) {
-		if (read(STDIN_FILENO, &is.ch[1], 1) != 1)
+	if (iscntrl(is->ch[0]))
+		is->state = IS_CTRL;
+	if ('\x1b' == is->ch[0]) {
+		if (read(STDIN_FILENO, &is->ch[1], 1) != 1)
 			return is;
-		if (read(STDIN_FILENO, &is.ch[2], 1) != 1)
+		if (read(STDIN_FILENO, &is->ch[2], 1) != 1)
 			return is;
-		is.state = e_is_seq;
+		is->state = IS_SEQ;
 	}
 	return is;
 }
 
-static inline handler_state_t	run_key_handler(struct s_input_state is) {
-	input_handler	ih = __ilt[is.state][(int)is.ch[0]];
-	handler_state_t	state = e_hs_continue;
+static inline handler_state_t
+run_key_handler(struct s_input_state *restrict is) {
+	input_handler	ih = __ilt[is->state][(int)is->ch[0]];
+	handler_state_t	state = HS_CONTINUE;
 
 	if (ih) {
 		state = ih(is);
@@ -237,21 +256,29 @@ static inline handler_state_t	run_key_handler(struct s_input_state is) {
 	return state;
 }
 
-char	*input_read(void) {
+dll_t	*input_read(void) {
+	handler_state_t	s = HS_CONTINUE;
+	struct s_input_state	is;
+	is.tokens = dll_init(DLL_GBIT_QUIET);
+
 	input_raw_mode();
 
-	handler_state_t	s = e_hs_continue;
-
 	ibuff = 0;
-	while (e_hs_continue == (s = run_key_handler(key_read())))
+	ilword = 0;
+	lkey = NULL;
+	while (HS_CONTINUE == (s = run_key_handler(key_read(&is))))
 		;
 
 	input_disable_raw_mode();
 
 	switch (s) {
-		case e_hs_stop: return ibuff ? strndup(buff, ibuff) : INPUT_CONTINUE;
-		case e_hs_exit: return INPUT_EXIT;
-		case e_hs_eof: return INPUT_EOF;
+		case HS_STOP: {
+			if (!ibuff)
+				return INPUT_CONTINUE;
+			return is.tokens;
+		}
+		case HS_EXIT: return INPUT_EXIT;
+		case HS_EOF: return INPUT_EOF;
 		default: return INPUT_CONTINUE;
 	}
 }

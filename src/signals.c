@@ -7,7 +7,6 @@ static void	sigchld_handler(int sig) {
 
 static void	sigint_handler(int sig) {
 	DBG_INFO("SIGINT | %d | %d(%s)\n", g_child, sig, strsignal(sig));
-	fwrite("\n", sizeof(char), 1, g_defout);
 }
 
 static inline void	sig_set_handler(int __sig, int __flags,

@@ -1,11 +1,5 @@
 #include "minishell.h"
 
-struct builtin_ds {
-	const char *restrict	bname;
-	void	(*bfnptr)(const struct command *restrict cmd);
-	size_t	max_argc;
-};
-
 static inline void	becho(const struct command *restrict cmd);
 static inline void	bcd(const struct command *restrict cmd);
 static inline void	benv(const struct command *restrict cmd);
@@ -13,6 +7,21 @@ static inline void	bsetenv(const struct command *restrict cmd);
 static inline void	bunsetenv(const struct command *restrict cmd);
 static inline void	bexit(const struct command *restrict cmd);
 static inline void	bhelp(const struct command *restrict cmd);
+
+struct s_builtin_data_set {
+	const char *restrict	bname;
+	void	(*bfnptr)(const struct command *restrict cmd);
+	size_t	max_argc;
+} __bds[] = {
+	{ "echo"    , becho    , ~((size_t)0)},
+	{ "cd"      , bcd      , 3},
+	{ "env"     , benv     , ~((size_t)0)},
+	{ "setenv"  , bsetenv  , 3},
+	{ "unsetenv", bunsetenv, 2},
+	{ "exit"    , bexit    , 2},
+	{ "help"    , bhelp    , 1},
+	{ NULL      , NULL     , 0}
+};
 
 static inline void	bunsupported(void) {
 	fprintf(stderr, "%s: builtins do not work with pipes or re-directions\n"
@@ -36,18 +45,16 @@ static inline void	becho(const struct command *restrict cmd) {
 	}
 
 	for (; cmd->argc > i; ++i) {
-		fwrite(cmd->argv[i], sizeof(char), strlen(cmd->argv[i]), g_defout);
-		if (i + 1 != cmd->argc) {
-			fwrite(" ", sizeof(char), 1, g_defout);
-		}
+		fwrite(cmd->argv[i], sizeof(*(cmd->argv[i])),
+			strlen(cmd->argv[i]), stdout);
+		if (i + 1 != cmd->argc)
+			fwrite(" ", sizeof(char), 1, stdout);
 	}
 	if (is_trail_newline)
-		fwrite("\n", sizeof(char), 1, g_defout);
+		fwrite("\n", sizeof(char), 1, stdout);
 	return ;
-
 becho_help_message:
-	fprintf(g_defout,
-		"Usage: echo [SHORT-OPTION]... [STRING]...\n"
+	printf("Usage: echo [SHORT-OPTION]... [STRING]...\n"
 		"  or : echo LONG-OPTION\n"
 		"Echo the STRING(s) to standard output.\n"
 		"\t-n\tdo not output the trailing newline\n"
@@ -93,7 +100,7 @@ static inline void	bcd(const struct command *restrict cmd) {
 static inline void	benv(const struct command *restrict cmd) {
 	if (1 == cmd->argc) {
 		for (size_t i = 0; environ[i]; ++i)
-			fputs(environ[i], g_defout);
+			puts(environ[i]);
 	} else {
 		struct command	c;
 		c.argc = cmd->argc - 1;
@@ -137,7 +144,7 @@ static inline void	bhelp(const struct command *restrict cmd) {
 		fprintf(stderr, "%s: too many arguments\n", cmd->argv[0]);
 		return ;
 	}
-	fprintf(g_defout, "Builtins help:\n"
+	printf("Builtins help:\n"
 		"\techo    \tdisplay a line of text\n"
 		"\tcd      \tchange the current directory\n"
 		"\tsetenv  \tadd the variable to the environment\n"
@@ -148,24 +155,15 @@ static inline void	bhelp(const struct command *restrict cmd) {
 		"\n(!!!) No pipes or re-directions do not work for builtin commands\n");
 }
 
-bool	cmd_builtinrun(const struct command *restrict cmd) {
-	static const struct builtin_ds	__bds[] = {
-		{ "echo"    , becho    , ~((size_t)0)},
-		{ "cd"      , bcd      , 3},
-		{ "env"     , benv     , ~((size_t)0)},
-		{ "setenv"  , bsetenv  , 3},
-		{ "unsetenv", bunsetenv, 2},
-		{ "exit"    , bexit    , 2},
-		{ "help"    , bhelp    , 1},
-		{ NULL      , NULL     , 0}
-	};
+bool	cmd_builtinrun(const struct command *restrict cmd,
+		cq_type_t cq_type) {
 	size_t	match;
-
 	for (match = 0; __bds[match].bname; ++match)
 		if (!strcmp(__bds[match].bname, cmd->argv[0]))
 			break ;
+
 	if (__bds[match].bname) {
-		if (g_is_cq_piped) {
+		if (CQ_PIPE == cq_type) {
 			bunsupported();
 		} else {
 			if (__bds[match].max_argc < cmd->argc) {
@@ -180,5 +178,9 @@ bool	cmd_builtinrun(const struct command *restrict cmd) {
 }
 
 bool	cmd_fast_builtinrun(const struct command cmd) {
-	return cmd_builtinrun(&cmd);
+	return cmd_builtinrun(&cmd, CQ_DEFAULT);
+}
+
+bool	cmd_fast_tbuiltinrun(const struct command cmd, cq_type_t cq_type) {
+	return cmd_builtinrun(&cmd, cq_type);
 }

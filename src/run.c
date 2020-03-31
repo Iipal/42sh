@@ -50,20 +50,20 @@ inline void	cmd_solorun(const struct command *restrict cmd) {
 	}
 }
 
-void	cmd_run(const size_t cq_length, struct command *restrict *restrict cq) {
-	for (size_t i = 0; cq_length > i; i++)
-		if (cmd_builtinrun(cq[i]))
+void	cmd_run(struct command_queue *restrict cq) {
+	for (size_t i = 0; cq->size > i; i++)
+		if (cmd_builtinrun(cq->cmd[i], cq->type))
 			return ;
 
 	DBG_INFO("parent | %d(%d)\n", getpid(), getppid());
-	if (1 < cq_length) {
+	if (1 < cq->size) {
 		if (!(g_child = fork())) {
-			cmd_pipe_queuing(cq_length - 2, cq_length - 1, cq);
+			cmd_pipe_queuing(cq->size - 2, cq->size - 1, cq->cmd);
 		} else if (0 < g_child) {
 			DBG_INFO("wait   | %d\n", g_child);
 			waitpid(g_child, NULL, WUNTRACED);
 		}
 	} else {
-		cmd_solorun(cq[0]);
+		cmd_solorun(cq->cmd[0]);
 	}
 }

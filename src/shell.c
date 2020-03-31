@@ -1,71 +1,63 @@
 #include "minishell.h"
 
-static inline void	cq_free(void) {
-	for (size_t i = 0; g_cq_len >= i && g_cq[i]; ++i) {
-		if (g_cq[i]->argv) {
-			for (size_t j = 0; g_cq[i]->argc >= j; j++)
-				free(g_cq[i]->argv[j]);
-			free(g_cq[i]->argv);
-		}
-		free(g_cq[i]);
-	}
-	free((void*)g_cq);
-}
-
 static inline void	shell_refresh_global_data(void) {
-	g_is_cq_piped = false;
 	g_child = 0;
-	if (g_cq) {
-		cq_free();
-		g_cq = NULL;
-	}
-	g_cq_len = 1;
 }
 
-static inline bool	line_tokenize_to_cq(char *restrict line,
-					struct command *restrict *restrict cq) {
-	struct command *restrict	c = NULL;
-	size_t	cq_iter = 0;
-	char	*save = NULL;
-	char	*token = strtok_r(line, " |", &save);
-
-	while (token) {
-		if (!cq[cq_iter])
-			assert(c = cq[cq_iter] = calloc(1, sizeof(*c)));
-		assert(c->argv = realloc(c->argv, sizeof(*(c->argv)) * (c->argc + 2)));
-		assert(c->argv[c->argc++] = strdup(token));
-		c->argv[c->argc] = NULL;
-		if ('|' == *save)
-			++cq_iter;
-		token = strtok_r(NULL, " |", &save);
+static inline void	cq_free(struct command_queue *restrict cq) {
+	for (size_t i = 0; cq->size >= i && cq->cmd[i]; ++i) {
+		if (cq->cmd[i]->argv) {
+			for (size_t j = 0; cq->cmd[i]->argc >= j; j++)
+				free(cq->cmd[i]->argv[j]);
+			free(cq->cmd[i]->argv);
+		}
+		free(cq->cmd[i]);
 	}
-	return true;
+	free((void*)cq);
+}
+
+static inline struct command_queue
+*tokens_to_cq(dll_t *restrict tokens, struct command_queue *restrict cq) {
+	(void)tokens;
+	(void)cq;
+	return NULL;
+}
+
+static int	print_token(const void *restrict data) {
+	static const char	*tk_str_types[] = {
+		"EXEC", "OPT", "ARG", "PIPE", "REDIR", "REDIRA", "REDIRD", NULL
+	};
+	const struct s_token_key *restrict	tk = data;
+
+	DBG_INFO(" %s: %s(%zu)\n", tk_str_types[tk->type], tk->str, tk->len);
+	return 0;
 }
 
 void	shell(void) {
-	char *restrict	line;
+	dll_t *restrict	tokens = NULL;
+	struct command_queue	*cq = NULL;
 	while (1) {
 		shell_refresh_global_data();
-		fprintf(g_defout, "$> ");
-		line = input_read();
+		printf("$> ");
+		tokens = input_read();
 
-		if (INPUT_EOF == line) {
+		if (INPUT_EOF == tokens) {
 			rewind(stdin);
-			fwrite("\n", sizeof(char), 1, g_defout);
+			puts("");
 			continue ;
-		} else if (INPUT_EXIT == line) {
+		} else if (INPUT_EXIT == tokens) {
 			break ;
-		} else if (INPUT_CONTINUE == line) {
+		} else if (INPUT_CONTINUE == tokens) {
 			continue ;
 		}
 
-		if (g_opt_stdout_redir)
-			printf("$> %s\n", line);
+		dll_print(tokens, print_token);
+		continue ;
 
-		assert(g_cq = calloc(g_cq_len + 1, sizeof(*g_cq)));
-		if (!line_tokenize_to_cq(line, g_cq))
-			continue ;
-		cmd_run(g_cq_len, g_cq);
-		free(line);
+		while ((cq = tokens_to_cq(tokens, cq))) {
+			cmd_run(cq);
+			cq_free(cq);
+		}
+		dll_free(tokens);
 	}
 }
