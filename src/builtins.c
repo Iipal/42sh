@@ -136,7 +136,7 @@ bexit(const struct command *restrict cmd) {
 	if (2 == cmd->argc) {
 		exit_status = atoi(cmd->argv[1]);
 	}
-	exit(exit_status);
+	_Exit(exit_status);
 }
 
 static inline void	bhelp(const struct command *restrict cmd) {
