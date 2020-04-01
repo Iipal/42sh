@@ -23,8 +23,8 @@
 
 # include "msh_global.h"
 # include "msh_cmd.h"
-# include "msh_input.h"
 # include "msh_builtins.h"
+# include "msh_dll_token.h"
 
 void	parse_options(int ac, char *const *av);
 

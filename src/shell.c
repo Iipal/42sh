@@ -1,9 +1,5 @@
 #include "minishell.h"
 
-static inline void	shell_refresh_global_data(void) {
-	g_child = 0;
-}
-
 static inline void	cq_free(struct command_queue *restrict cq) {
 	for (size_t i = 0; cq->size > i && cq->cmd[i]; ++i) {
 		if (cq->cmd[i]->argv) {
@@ -25,7 +21,7 @@ static inline struct command_queue	*tokens_to_cq(dll_t *restrict tokens) {
 
 	struct command_queue *restrict	cq = NULL;
 	struct command *restrict	icmd = NULL;
-	struct s_token_key *restrict	k = NULL;
+	struct tk_key *restrict	k = NULL;
 	char *restrict	env_var_temp = NULL;
 
 	assert(cq = calloc(1, sizeof(*cq)));
@@ -69,7 +65,7 @@ static int	print_token(const void *restrict data) {
 	static const char	*tk_str_types[] = {
 		"EXEC", "OPT", "ARG", "PIPE", "REDIR", "REDIRA", "REDIRD", "SEMI", "ENV"
 	};
-	const struct s_token_key *restrict	tk = data;
+	const struct tk_key *restrict	tk = data;
 
 	DBG_INFO(" %s: %s(%zu)\n", tk_str_types[tk->type], tk->str, tk->len);
 	return 0;
@@ -79,7 +75,7 @@ void	shell(void) {
 	dll_t *restrict	tokens = NULL;
 	struct command_queue	*cq = NULL;
 	while (1) {
-		shell_refresh_global_data();
+		g_child = 0;
 		printf("$> ");
 		tokens = input_read();
 

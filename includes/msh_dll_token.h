@@ -30,7 +30,7 @@ typedef enum e_token_type {
 # define TK_ENV_VAR TK_ENV_VAR
 } msh_attr_pack tk_type_t;
 
-struct s_token_key {
+struct tk_key {
 	char *restrict	str;
 	size_t	len;
 	tk_type_t	type;
