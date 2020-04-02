@@ -1,5 +1,8 @@
 #include "minishell.h"
 
+// run.c
+extern pid_t	g_child;
+
 static void	sigchld_handler(int sig) {
 	DBG_INFO("SIGCHLD | %d | %d(%s)\n", g_child, sig, strsignal(sig));
 	waitpid(g_child, NULL, WUNTRACED | WNOHANG);

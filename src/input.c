@@ -78,7 +78,7 @@ static handler_state_t	__ictrl_l(void) {
 
 static handler_state_t	__ictrl_q(void) {
 	if (!g_ibuff)
-		printf("exit\n");
+		fwrite("exit\n", 5, 1, stdout);
 	refresh_global_input_data();
 	return HS_EXIT;
 }
@@ -102,13 +102,12 @@ static handler_state_t	__iseq(void) {
 			__imove_cursos_left();
 		} else if ('C' == g_ch[2]) {
 			__imove_cursos_right();
+		} else {
+			DBG_INFO("%c", '\n');
+			size_t i = 0;
+			while (4 > ++i && g_ch[i])
+				DBG_INFO(" .SEQ: %d - '%c'\n", g_ch[i], g_ch[i]);
 		}
-	}
-	size_t i = 1;
-	DBG_INFO("%c", '\n');
-	while (4 > i && g_ch[i]) {
-		DBG_INFO(" .SEQ: %d - '%c'\n", g_ch[i], g_ch[i]);
-		++i;
 	}
 	return HS_CONTINUE;
 };
@@ -128,9 +127,9 @@ static inline input_state_t	key_read(void) {
 		}
 	}
 	if ('\x1b' == g_ch[0]) {
-		if (read(STDIN_FILENO, &g_ch[1], 1) != 1)
+		if (1 != read(STDIN_FILENO, &g_ch[1], 1))
 			return IS_CHAR;
-		if (read(STDIN_FILENO, &g_ch[2], 1) != 1)
+		if (1 != read(STDIN_FILENO, &g_ch[2], 1))
 			return IS_CHAR;
 		return IS_SEQ;
 	}
@@ -138,18 +137,16 @@ static inline input_state_t	key_read(void) {
 }
 
 static inline handler_state_t	run_key_handler(input_state_t is) {
-	handler_state_t	state = HS_CONTINUE;
 	switch (is) {
-		case IS_SEQ: return __iseq(); break ;
-		case IS_EOF: return HS_EOF; break ;
+		case IS_SEQ: return __iseq();
+		case IS_EOF: return HS_EOF;
 		default: {
 			input_handler_t	ih = __ihlt[(int)g_ch[0]];
-			if (ih) {
+			if (ih)
 				return ih();
-			}
 		}
 	}
-	return state;
+	return HS_CONTINUE;
 }
 
 char	*input_read(void) {

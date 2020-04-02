@@ -1,5 +1,8 @@
 #include "minishell.h"
 
+int	g_opt_dbg_level = 0;
+int	g_opt_help = 0;
+
 void	parse_options(int ac, char *const *av) {
 	static struct option	l_opts[] = {
 		{ "debug", no_argument, &g_opt_dbg_level   , 1 },

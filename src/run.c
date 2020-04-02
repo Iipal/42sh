@@ -1,5 +1,7 @@
 #include "minishell.h"
 
+pid_t	g_child = 0;
+
 static inline void	pipe_redir(int from, int to, int trash) {
 	dup2(from, to);
 	close(from);
@@ -13,8 +15,8 @@ void	cmd_pipe_queuing(const ssize_t isender,
 		return ;
 
 	int	fds[2] = { 0, 0 };
-	assert(-1 != pipe(fds));
-	assert(-1 != (g_child = fork()));
+	assert_perror(-1 == pipe(fds));
+	assert_perror(-1 == (g_child = fork()));
 
 	if (!g_child) {
 		pipe_redir(fds[1], STDOUT_FILENO, fds[0]);

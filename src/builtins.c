@@ -13,20 +13,21 @@ struct s_builtin_data_set {
 	void	(*bfnptr)(const struct command *restrict cmd);
 	size_t	max_argc;
 } __bds[] = {
-	{ "echo"    , becho    , ~((size_t)0)},
-	{ "cd"      , bcd      , 3},
-	{ "env"     , benv     , ~((size_t)0)},
-	{ "setenv"  , bsetenv  , 3},
-	{ "unsetenv", bunsetenv, 2},
-	{ "exit"    , bexit    , 2},
-	{ "help"    , bhelp    , 1},
-	{ NULL      , NULL     , 0}
+	{ "echo"    , becho    , ~((size_t)0) },
+	{ "cd"      , bcd      , 3 },
+	{ "env"     , benv     , ~((size_t)0) },
+	{ "setenv"  , bsetenv  , 3 },
+	{ "unsetenv", bunsetenv, 2 },
+	{ "exit"    , bexit    , 2 },
+	{ "help"    , bhelp    , 1 },
+	{ NULL      , NULL     , 0 }
 };
 
-static inline void	bunsupported(void) {
+static inline bool	bunsupported(void) {
 	fprintf(stderr, "%s: builtins do not work with pipes or re-directions\n"
 		"\tType 'help' for more information.\n",
 		program_invocation_short_name);
+	return false;
 }
 
 static inline void	becho(const struct command *restrict cmd) {
@@ -155,26 +156,22 @@ static inline void	bhelp(const struct command *restrict cmd) {
 		"\n(!!!) No pipes or re-directions do not work for builtin commands\n");
 }
 
-bool	cmd_builtinrun(const struct command *restrict cmd,
-		cq_type_t cq_type) {
+bool	cmd_builtinrun(const struct command *restrict cmd, cq_type_t cq_type) {
 	size_t	match;
 	for (match = 0; __bds[match].bname; ++match)
 		if (!strcmp(__bds[match].bname, cmd->argv[0]))
 			break ;
 
-	if (__bds[match].bname) {
-		if (CQ_PIPE == cq_type) {
-			bunsupported();
-		} else {
-			if (__bds[match].max_argc < cmd->argc) {
-				fprintf(stderr, "%s: too many arguments\n", __bds[match].bname);
-			} else {
-				__bds[match].bfnptr(cmd);
-			}
-		}
-		return true;
+	if (!__bds[match].bname)
+		return false;
+	if (CQ_PIPE == cq_type)
+		return bunsupported();
+	if (__bds[match].max_argc < cmd->argc) {
+		fprintf(stderr, "%s: too many arguments\n", __bds[match].bname);
+	} else {
+		__bds[match].bfnptr(cmd);
 	}
-	return false;
+	return true;
 }
 
 bool	cmd_fast_builtinrun(const struct command cmd) {

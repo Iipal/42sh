@@ -162,13 +162,12 @@ void	shell(void) {
 	struct command_queue *restrict	cq = NULL;
 	dll_t *restrict	tokens = NULL;
 	while (1) {
-		g_child = 0;
-		printf("$> ");
+		fwrite("$> ", 3, 1, stdout);
 		line = input_read();
 
 		if (INPUT_EOF == line) {
 			rewind(stdin);
-			puts("");
+			fwrite("\n", 1, 1, stdout);
 			continue ;
 		} else if (INPUT_EXIT == line) {
 			break ;
