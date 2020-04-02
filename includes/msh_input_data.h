@@ -27,8 +27,6 @@ typedef enum e_handler_state {
 typedef enum e_input_state {
 	IS_CHAR = 0, // Single character input
 # define IS_CHAR IS_CHAR
-	IS_CTRL,     // Character pressed with Ctrl
-# define IS_CTRL IS_CTRL
 	IS_SEQ,      // Escape Sequence
 # define IS_SEQ IS_SEQ
 	IS_EOF,      // read() error
@@ -40,26 +38,13 @@ typedef enum e_input_state {
 typedef handler_state_t	(*input_handler_t)(void);
 
 static char	g_ch[4] = { 0 };
-static input_state_t	g_is_state = 0;
-static dll_t *restrict	g_tokens = NULL;
-static struct tk_key *restrict	g_lkey = NULL;
-
 static char	g_buff[INPUT_BUFF_SIZE] = { 0 };
 static size_t	g_ibuff = 0;
-static size_t	g_ilword = 0;
 
 static inline void	refresh_global_input_data(void) {
 	bzero(g_buff, g_ibuff);
-	g_lkey = NULL;
-	g_is_state = g_ibuff = g_ilword = 0;
-	if (g_tokens) {
-		while (dll_popfront(g_tokens))
-			;
-		NULL;
-	}
+	g_ibuff = 0;
 }
-
-# define get_key(_obj) ((struct tk_key*)dll_getdata(_obj))
 
 # define KEY_DEL 0x7f
 # define KEY_ESC 0x1b
@@ -67,9 +52,6 @@ static inline void	refresh_global_input_data(void) {
 
 static inline handler_state_t	__ispace(void);
 static inline handler_state_t	__inew_line(void);
-static inline handler_state_t	__imulticmd(void);
-static inline handler_state_t	__iredir(void);
-static inline handler_state_t	__ipipe(void);
 static inline handler_state_t	__iprintable(void);
 static inline handler_state_t	__ihome_path(void);
 static inline handler_state_t	__idelch(void);
@@ -80,34 +62,19 @@ static inline handler_state_t	__ictrl_q(void);
 
 static inline handler_state_t	__iseq(void);
 
-static inline handler_state_t	__ieof(void);
-
 // IHLT - Input Handlers Lookup Table
-static const input_handler_t *restrict	__ihlt[] = {
-	[IS_CHAR] = (input_handler_t[]) {
-		['\t'] = __ispace,
-		['\n'] = __inew_line,
-		['\v' ... '\r'] = __ispace,
-		[' '] = __ispace,
-		['!' ... ':'] = __iprintable,
-		[';'] = __imulticmd,
-		['<' ... '=' ] = __iprintable,
-		['>'] = __iredir,
-		['?' ... '{'] = __iprintable,
-		['|'] = __ipipe,
-		['}'] = __iprintable,
-		['~'] = __ihome_path,
-		[KEY_DEL] = __idelch,
-	},
-	[IS_CTRL] = (input_handler_t[]) {
-		[KEY_CTRL('C') ... KEY_CTRL('D')] = __ictrl_cd, // Ctrl+C, Ctrl+D
-		[KEY_CTRL('J')] = __inew_line, // Ctrl+J
-		[KEY_CTRL('L')] = __ictrl_l,   // Ctrl+L
-		[KEY_CTRL('Q')] = __ictrl_q,   // Ctrl+Q
-		[KEY_DEL] = __idelch // DEL
-	},
-	[IS_SEQ] = (input_handler_t[]) { [0 ... 127] = __iseq },
-	[IS_EOF] = (input_handler_t[]) { [0 ... 127] = __ieof }
+static const input_handler_t	__ihlt[] = {
+	[KEY_CTRL('C') ... KEY_CTRL('D')] = __ictrl_cd,
+	[KEY_CTRL('|') /* '\t' */ ] = __ispace,
+	[KEY_CTRL('J') /* '\n' */ ] = __inew_line,
+	['\v'] = __ispace,
+	[KEY_CTRL('L') /* '\f' */ ] = __ictrl_l,
+	['\r'] = __ispace,
+	[KEY_CTRL('Q')] = __ictrl_q,
+	[' '] = __ispace,
+	['!' ... '}'] = __iprintable,
+	['~'] = __ihome_path,
+	[KEY_DEL] = __idelch,
 };
 
 #endif /* MSH_INPUT_DATA_H */

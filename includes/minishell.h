@@ -32,11 +32,11 @@ void	init_sig_handlers(void);
 
 void	shell(void);
 
-# define INPUT_EOF      ((dll_t*)-1)
-# define INPUT_EXIT     ((dll_t*)-2)
+# define INPUT_EOF      ((char*)-1)
+# define INPUT_EXIT     ((char*)-2)
 # define INPUT_CONTINUE NULL
 
-dll_t	*input_read(void);
+char	*input_read(void);
 
 void	cmd_run(struct command_queue *restrict cq);
 void	cmd_solorun(const struct command *restrict cmd);
