@@ -40,10 +40,11 @@ typedef handler_state_t	(*input_handler_t)(void);
 static char	g_ch[4] = { 0 };
 static char	g_buff[INPUT_BUFF_SIZE] = { 0 };
 static size_t	g_ibuff = 0;
+static size_t	g_buff_len = 0;
 
 static inline void	refresh_global_input_data(void) {
 	bzero(g_buff, g_ibuff);
-	g_ibuff = 0;
+	g_ibuff = g_buff_len = 0;
 }
 
 # define KEY_DEL 0x7f
