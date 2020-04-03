@@ -41,9 +41,14 @@ static char	g_ch[4] = { 0 };
 static char	g_buff[INPUT_BUFF_SIZE] = { 0 };
 static size_t	g_ibuff = 0;
 static size_t	g_buff_len = 0;
+static dll_obj_t	*g_curr_input_save = NULL;
 
 static inline void	refresh_global_input_data(void) {
 	bzero(g_buff, g_ibuff);
+	if (g_curr_input_save) {
+		dll_freeobj(g_curr_input_save);
+		g_curr_input_save = NULL;
+	}
 	g_ibuff = g_buff_len = 0;
 }
 

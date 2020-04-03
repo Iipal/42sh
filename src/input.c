@@ -45,13 +45,13 @@ static handler_state_t	__idelch(void) {
 	if (!g_ibuff)
 		return HS_CONTINUE;
 	if (g_buff[g_ibuff]) {
-		fwrite("\b", 1, 1, stdout);
+		putchar('\b');
 		size_t	cursor_shifted = g_buff_len - g_ibuff;
 		strcpy(g_buff + g_ibuff - 1, g_buff + g_ibuff);
 		fwrite(g_buff + g_ibuff - 1, cursor_shifted, 1, stdout);
 		fwrite(" \b", 2, 1, stdout);
 		while (cursor_shifted--)
-			fwrite("\b", 1, 1, stdout);
+			putchar('\b');
 	} else {
 		fwrite("\b \b", 3, 1, stdout);;
 		g_buff[--g_ibuff] = 0;
@@ -72,13 +72,13 @@ static handler_state_t	__ictrl_l(void) {
 	fwrite(g_buff, g_buff_len, 1, stdout);
 	size_t	cursor_shifted = g_buff_len - g_ibuff;
 	while (cursor_shifted--)
-		fwrite("\b", 1, 1, stdout);
+		putchar('\b');
 	return HS_CONTINUE;
 }
 
 static handler_state_t	__ictrl_q(void) {
 	if (!g_ibuff)
-		fwrite("exit\n", 5, 1, stdout);
+		puts("exit");
 	refresh_global_input_data();
 	return HS_EXIT;
 }
@@ -87,7 +87,7 @@ static handler_state_t	__ictrl_q(void) {
 static inline void	__imove_cursos_left(void) {
 	if (g_ibuff) {
 		--g_ibuff;
-		fwrite("\b", 1, 1, stdout);
+		putchar('\b');
 	}
 }
 
@@ -96,12 +96,72 @@ static inline void	__imove_cursos_right(void) {
 		fwrite(g_buff + g_ibuff++, 1, 1, stdout);
 }
 
+static int search_duplicate(const void *restrict data) {
+	int	ret = strcmp(g_buff, data);
+	if (0 > ret)
+		ret = 1;
+	return ret;
+}
+
+static inline void	update_save(void) {
+	char *save_str = dll_getdata(g_curr_input_save);
+	if (strcmp(save_str, g_buff)) {
+		dll_freeobj(g_curr_input_save);
+		g_curr_input_save = dll_new(g_buff, g_buff_len,
+			DLL_BIT_EIGN | DLL_BIT_DUP, NULL);
+	}
+}
+
+static inline void	__ihistory_prev(void) {
+	dll_obj_t *restrict	prev_obj = g_history_last;
+	if (!prev_obj) {
+		if (g_curr_input_save) {
+			prev_obj = g_curr_input_save;
+		} else {
+			return ;
+		}
+	}
+
+	char *restrict str = dll_getdata(prev_obj);
+	size_t	len = dll_getsizeobj(prev_obj);
+	if (prev_obj != g_curr_input_save) {
+		if (g_curr_input_save
+		&& !dll_findkeyr(g_session_history, search_duplicate)) {
+			update_save();
+		} else if (!g_curr_input_save) {
+			g_curr_input_save = dll_new(g_buff, g_buff_len,
+				DLL_BIT_EIGN | DLL_BIT_DUP, NULL);
+		}
+	}
+	bzero(g_buff, g_buff_len);
+	while (g_buff_len--)
+		fwrite("\b \b", 3, 1, stdout);
+	if (g_buff[g_ibuff])
+		fwrite(g_buff + g_ibuff, g_buff_len - g_ibuff, 1, stdout);
+	strcpy(g_buff, str);
+	g_ibuff = g_buff_len = len;
+	fwrite(g_buff, g_buff_len, 1, stdout);
+
+	if (prev_obj == g_curr_input_save) {
+		update_save();
+		g_history_last = dll_getlast(g_session_history);
+	} else {
+		g_history_last = dll_getprev(g_history_last);
+	}
+}
+
+static inline void	__ihistory_next(void) {
+
+}
+
 static handler_state_t	__iseq(void) {
+	static void (*seq_handlers[])(void) = {
+		__ihistory_prev, __ihistory_next,
+		__imove_cursos_right, __imove_cursos_left
+	};
 	if ('[' == g_ch[1]) {
-		if ('D' == g_ch[2]) {
-			__imove_cursos_left();
-		} else if ('C' == g_ch[2]) {
-			__imove_cursos_right();
+		if ('A' <= g_ch[2] && 'D' >= g_ch[2]) {
+			seq_handlers[g_ch[2] - 'A']();
 		} else {
 			DBG_INFO("%c", '\n');
 			size_t i = 0;

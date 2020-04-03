@@ -137,6 +137,7 @@ bexit(const struct command *restrict cmd) {
 	if (2 == cmd->argc) {
 		exit_status = atoi(cmd->argv[1]);
 	}
+	dll_free(g_session_history);
 	_Exit(exit_status);
 }
 
