@@ -47,6 +47,7 @@ static dll_obj_t *restrict	g_history_current = NULL;
 
 static inline void	refresh_global_input_data(void) {
 	bzero(g_buff, g_buff_len);
+	g_history_current = NULL;
 	if (g_input_save) {
 		dll_freeobj(g_input_save);
 		g_input_save = NULL;

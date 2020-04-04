@@ -134,9 +134,10 @@ static inline void	bunsetenv(const struct command *restrict cmd) {
 static inline __attribute__((noreturn)) void
 bexit(const struct command *restrict cmd) {
 	int	exit_status = EXIT_SUCCESS;
-	if (2 == cmd->argc) {
+	if (2 == cmd->argc)
 		exit_status = atoi(cmd->argv[1]);
-	}
+
+	save_history();
 	dll_free(g_session_history);
 	_Exit(exit_status);
 }

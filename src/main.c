@@ -4,7 +4,7 @@ dll_t *restrict	g_session_history = NULL;
 dll_obj_t *restrict g_history_last = NULL;
 
 int	main(int argc, char *argv[]) {
-	g_session_history = dll_init(DLL_GBIT_QUIET);
+	read_history();
 	setbuf(stdout, NULL);
 	parse_options(argc, argv);
 	init_sig_handlers();

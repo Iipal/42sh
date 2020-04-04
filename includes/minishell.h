@@ -44,4 +44,7 @@ void	cmd_pipe_queuing(const ssize_t isender,
 				const ssize_t ireceiver,
 				struct command *restrict *restrict cq);
 
+void	read_history(void);
+void	save_history(void);
+
 #endif /* MINISHELL_H */

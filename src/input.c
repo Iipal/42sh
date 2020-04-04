@@ -135,36 +135,35 @@ static inline void	__ihistory_putdata(dll_obj_t *restrict obj) {
 	g_ibuff = g_buff_len = len;
 }
 
-static inline bool	__ihistory_get_current_obj(
+static inline void	__ihistory_base(
 		dll_obj_t *(*fn_get_next)(const dll_obj_t *restrict),
 		dll_obj_t *(*fn_get_head)(const dll_t *restrict)) {
 	if (!g_history_current) {
 		__ihistory_updatesave((void*)0x1);
-		g_history_current = fn_get_head(g_session_history);
+		if (!(g_history_current = fn_get_head(g_session_history))) {
+			if (!g_input_save)
+				return ;
+			g_history_current = g_input_save;
+		}
 	} else {
 		if (!(g_history_current = fn_get_next(g_history_current))) {
 			if (!g_input_save)
-				return false;
+				return ;
 			g_history_current = g_input_save;
 		}
 	}
-	return true;
+	__ihistory_putdata(g_history_current);
+	if (g_history_current == g_input_save)
+		g_history_current = NULL;
+	return ;
 }
 
 static inline void	__ihistory_prev(void) {
-	if (__ihistory_get_current_obj(dll_getprev, dll_getlast)) {
-		__ihistory_putdata(g_history_current);
-		if (g_history_current == g_input_save)
-			g_history_current = NULL;
-	}
+	__ihistory_base(dll_getprev, dll_getlast);
 }
 
 static inline void	__ihistory_next(void) {
-	if (__ihistory_get_current_obj(dll_getnext, dll_gethead)) {
-		__ihistory_putdata(g_history_current);
-		if (g_history_current == g_input_save)
-			g_history_current = NULL;
-	}
+	__ihistory_base(dll_getnext, dll_gethead);
 }
 
 static handler_state_t	__iseq(void) {
