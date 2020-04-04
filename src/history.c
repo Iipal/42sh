@@ -19,10 +19,10 @@ void	save_history(void) {
 		perror("fopen(./.msh_history)");
 		return ;
 	}
-	dll_obj_t *restrict	obj = dll_gethead(g_session_history);
 
+	dll_obj_t *restrict	obj = dll_gethead(g_session_history);
 	while (obj) {
-		fwrite(dll_getdata(obj), dll_getsizeobj(obj), 1, file);
+		fwrite(dll_getdata(obj), dll_getdatasize(obj), 1, file);
 		fwrite("\n", 1, 1, file);
 		dll_popfront(g_session_history);
 		obj = dll_gethead(g_session_history);

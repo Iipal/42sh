@@ -121,7 +121,7 @@ static inline void	__ihistory_updatesave(dll_obj_t *restrict obj) {
 
 static inline void	__ihistory_putdata(dll_obj_t *restrict obj) {
 	char *restrict	str = dll_getdata(obj);
-	size_t len = dll_getsizeobj(obj);
+	size_t len = dll_getdatasize(obj);
 
 	if (g_buff_len) {
 		if (g_buff[g_ibuff])
