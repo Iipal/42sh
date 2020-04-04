@@ -185,7 +185,7 @@ void	shell(void) {
 			cq = tokens_to_cq(NULL);
 		}
 		dll_free(tokens);
-		g_history_last = dll_pushback(g_session_history, line, strlen(line),
+		dll_pushback(g_session_history, line, strlen(line),
 			DLL_BIT_FREE | DLL_BIT_EIGN, NULL);
 	}
 }

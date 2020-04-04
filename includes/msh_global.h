@@ -13,6 +13,5 @@ extern pid_t	g_child;
 
 // Current session commands history
 extern dll_t *restrict	g_session_history;
-extern dll_obj_t *restrict	g_history_last;
 
 #endif /* MSH_GLOBAL_H */

@@ -96,62 +96,75 @@ static inline void	__imove_cursos_right(void) {
 		fwrite(g_buff + g_ibuff++, 1, 1, stdout);
 }
 
-static int search_duplicate(const void *restrict data) {
+static int find_buff_dup(const void *restrict data) {
 	int	ret = strcmp(g_buff, data);
 	if (0 > ret)
 		ret = 1;
 	return ret;
 }
 
-static inline void	update_save(void) {
-	char *save_str = dll_getdata(g_curr_input_save);
-	if (strcmp(save_str, g_buff)) {
-		dll_freeobj(g_curr_input_save);
-		g_curr_input_save = dll_new(g_buff, g_buff_len,
-			DLL_BIT_EIGN | DLL_BIT_DUP, NULL);
+static inline void	__ihistory_updatesave(dll_obj_t *restrict obj) {
+	if (obj != g_input_save) {
+		if (g_input_save && !dll_findkeyr(g_session_history, find_buff_dup)) {
+			char *restrict	save_str = dll_getdata(g_input_save);
+			if (strcmp(save_str, g_buff)) {
+				dll_freeobj(g_input_save);
+				g_input_save = dll_new(strdup(g_buff), g_buff_len,
+					DLL_BIT_EIGN | DLL_BIT_FREE, NULL);
+			}
+		} else if (!g_input_save) {
+			g_input_save = dll_new(strdup(g_buff), g_buff_len,
+				DLL_BIT_EIGN | DLL_BIT_FREE, NULL);
+		}
 	}
 }
 
-static inline void	__ihistory_prev(void) {
-	dll_obj_t *restrict	prev_obj = g_history_last;
-	if (!prev_obj) {
-		if (g_curr_input_save) {
-			prev_obj = g_curr_input_save;
-		} else {
-			return ;
-		}
-	}
+static inline void	__ihistory_putdata(dll_obj_t *restrict obj) {
+	char *restrict	str = dll_getdata(obj);
+	size_t len = dll_getsizeobj(obj);
 
-	char *restrict str = dll_getdata(prev_obj);
-	size_t	len = dll_getsizeobj(prev_obj);
-	if (prev_obj != g_curr_input_save) {
-		if (g_curr_input_save
-		&& !dll_findkeyr(g_session_history, search_duplicate)) {
-			update_save();
-		} else if (!g_curr_input_save) {
-			g_curr_input_save = dll_new(g_buff, g_buff_len,
-				DLL_BIT_EIGN | DLL_BIT_DUP, NULL);
-		}
+	if (g_buff_len) {
+		if (g_buff[g_ibuff])
+			fwrite(g_buff + g_ibuff, g_buff_len - g_ibuff, 1, stdout);
+		bzero(g_buff, g_buff_len);
 	}
-	bzero(g_buff, g_buff_len);
 	while (g_buff_len--)
 		fwrite("\b \b", 3, 1, stdout);
-	if (g_buff[g_ibuff])
-		fwrite(g_buff + g_ibuff, g_buff_len - g_ibuff, 1, stdout);
+	fwrite(str, len, 1, stdout);
 	strcpy(g_buff, str);
 	g_ibuff = g_buff_len = len;
-	fwrite(g_buff, g_buff_len, 1, stdout);
+}
 
-	if (prev_obj == g_curr_input_save) {
-		update_save();
-		g_history_last = dll_getlast(g_session_history);
+static inline bool	__ihistory_get_current_obj(
+		dll_obj_t *(*fn_get_next)(const dll_obj_t *restrict),
+		dll_obj_t *(*fn_get_head)(const dll_t *restrict)) {
+	if (!g_history_current) {
+		__ihistory_updatesave((void*)0x1);
+		g_history_current = fn_get_head(g_session_history);
 	} else {
-		g_history_last = dll_getprev(g_history_last);
+		if (!(g_history_current = fn_get_next(g_history_current))) {
+			if (!g_input_save)
+				return false;
+			g_history_current = g_input_save;
+		}
+	}
+	return true;
+}
+
+static inline void	__ihistory_prev(void) {
+	if (__ihistory_get_current_obj(dll_getprev, dll_getlast)) {
+		__ihistory_putdata(g_history_current);
+		if (g_history_current == g_input_save)
+			g_history_current = NULL;
 	}
 }
 
 static inline void	__ihistory_next(void) {
-
+	if (__ihistory_get_current_obj(dll_getnext, dll_gethead)) {
+		__ihistory_putdata(g_history_current);
+		if (g_history_current == g_input_save)
+			g_history_current = NULL;
+	}
 }
 
 static handler_state_t	__iseq(void) {
