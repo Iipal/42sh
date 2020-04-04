@@ -4,8 +4,9 @@ static inline char	*get_dst_path(void) {
 	const char	dest[] = "/.msh_history";
 	char *restrict	home = getpwuid(getuid())->pw_dir;
 	size_t	home_len = strlen(home);
-	char *restrict	dst_path = calloc(home_len + sizeof(dest), 1);
+	char *restrict	dst_path = NULL;
 
+	assert(dst_path = calloc(home_len + sizeof(dest), 1));
 	strcpy(dst_path, home);
 	strcpy(dst_path + home_len, dest);
 	return dst_path;

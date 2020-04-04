@@ -59,7 +59,8 @@ void	cmd_run(struct command_queue *restrict cq) {
 
 	DBG_INFO("parent | %d(%d)\n", getpid(), getppid());
 	if (1 < cq->size) {
-		if (!(g_child = fork())) {
+		assert_perror(-1 == (g_child = fork()));
+		if (!g_child) {
 			cmd_pipe_queuing(cq->size - 2, cq->size - 1, cq->cmd);
 		} else if (0 < g_child) {
 			DBG_INFO("wait   | %d\n", g_child);

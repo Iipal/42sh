@@ -18,6 +18,7 @@
 # include <sys/wait.h>
 # include <sys/types.h>
 # include <termios.h>
+# include <dirent.h>
 
 # include "libdll.h"
 

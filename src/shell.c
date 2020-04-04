@@ -130,7 +130,8 @@ static inline dll_t	*tokenize_line_to_dll(char *restrict line) {
 
 	while (line[i]) {
 		if (' ' == line[i] || !line[i + 1]) {
-			lkey = token_last_word(ilword, i + !line[i + 1], line, out, lkey);
+			size_t	ilword_len = i + (!line[i + 1] && ' ' != line[i]);
+			lkey = token_last_word(ilword, ilword_len, line, out, lkey);
 			ilword = i + 1;
 		} else if ('|' == line[i] || ';' == line[i]) {
 			if (i && ' ' != line[i - 1]) {

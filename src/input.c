@@ -60,6 +60,95 @@ static handler_state_t	__idelch(void) {
 	return HS_CONTINUE;
 }
 
+static void	suggest_del(void *restrict data) {
+	struct suggest_obj	*so = data;
+	free(so->name);
+	free(so);
+}
+
+static inline dll_t	*__iinit_suggestions(void) {
+	dll_t	*out = dll_init(DLL_GBIT_QUIET);
+
+	char	*dirname;
+	assert(dirname = get_current_dir_name());
+
+	struct dirent	*d = NULL;
+	DIR	*dir = opendir(dirname);
+
+	free(dirname);
+	if (!dir) {
+		perror("opendir");
+		return NULL;
+	}
+	struct suggest_obj	so;
+	while ((d = readdir(dir))) {
+		assert(so.name = strdup(d->d_name));
+		so.name_len = strlen(d->d_name);
+		so.selected = 0;
+		dll_pushback(out, &so, sizeof(so),
+			DLL_BIT_EIGN | DLL_BIT_DUP, suggest_del);
+	}
+	assert_perror(-1 == closedir(dir));
+	return out;
+}
+
+static size_t	g_suggest_printed = 0;
+
+static int	suggest_item_print(const void *restrict data) {
+	const struct suggest_obj *restrict	so = data;
+	if (so->selected)
+		g_suggest_printed += fwrite(">", 1, 1, stdout);
+	fwrite(so->name, so->name_len, 1, stdout);
+	fwrite(" ", 1, 1, stdout);
+	g_suggest_printed += so->name_len + 1;
+	return 0;
+};
+
+static inline handler_state_t	__isuggestions(void) {
+	if (!g_currdir_suggestions
+	&& !(g_currdir_suggestions = __iinit_suggestions()))
+		return HS_CONTINUE;
+	static dll_obj_t *restrict	last;
+	if (!last) {
+		last = dll_gethead(g_currdir_suggestions);
+	} else {
+		if (!(last = dll_getnext(last)))
+			last = dll_gethead(g_currdir_suggestions);
+	}
+	if (!last)
+		return HS_CONTINUE;
+	if (g_suggest_printed) {
+		fwrite("\x1b[1A", 4, 1, stdout);
+		size_t	i = g_suggest_printed;
+		while (i--)
+			fwrite(" ", 1, 1, stdout);
+		i = g_suggest_printed;
+		while (i--)
+			putchar('\b');
+		g_suggest_printed = 0;
+
+		fwrite("\x1b[1A", 4, 1, stdout);
+		i = 32;
+		while (i--)
+			fwrite(" ", 1, 1, stdout);
+		i = 32;
+		while (i--)
+			fwrite("\b", 1, 1, stdout);
+		fwrite("$> ", 3, 1, stdout);
+		fwrite(g_buff, g_ibuff, 1, stdout);
+	}
+
+	struct suggest_obj *restrict	so = dll_getdata(last);
+	fwrite(so->name, so->name_len, 1, stdout);
+	if (g_buff[g_ibuff])
+		fwrite(g_buff + g_ibuff, g_buff_len - g_ibuff, 1, stdout);
+	putchar('\n');
+	so->selected = 1;
+	dll_print(g_currdir_suggestions, suggest_item_print);
+	so->selected = 0;
+	return HS_CONTINUE;
+}
+
 // Handle keys what pressed with Ctrl
 static handler_state_t	__ictrl_cd(void) {
 	refresh_global_input_data();

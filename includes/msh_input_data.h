@@ -45,9 +45,19 @@ static size_t	g_buff_len = 0;
 static dll_obj_t *restrict	g_input_save = NULL;
 static dll_obj_t *restrict	g_history_current = NULL;
 
+static dll_t *restrict	g_currdir_suggestions = NULL;
+
+struct suggest_obj {
+	char *restrict	name;
+	size_t	name_len;
+	bool	selected;
+};
+
 static inline void	refresh_global_input_data(void) {
 	bzero(g_buff, g_buff_len);
 	g_history_current = NULL;
+	if (g_currdir_suggestions)
+		dll_free(g_currdir_suggestions);
 	if (g_input_save) {
 		dll_freeobj(g_input_save);
 		g_input_save = NULL;
@@ -59,22 +69,23 @@ static inline void	refresh_global_input_data(void) {
 # define KEY_ESC 0x1b
 # define KEY_CTRL(k) ((k) & 0x1f)
 
-static inline handler_state_t	__ispace(void);
-static inline handler_state_t	__inew_line(void);
-static inline handler_state_t	__iprintable(void);
-static inline handler_state_t	__ihome_path(void);
-static inline handler_state_t	__idelch(void);
+static handler_state_t	__ispace(void);
+static handler_state_t	__inew_line(void);
+static handler_state_t	__iprintable(void);
+static handler_state_t	__ihome_path(void);
+static handler_state_t	__idelch(void);
+static handler_state_t	__isuggestions(void);
 
-static inline handler_state_t	__ictrl_cd(void);
-static inline handler_state_t	__ictrl_l(void);
-static inline handler_state_t	__ictrl_q(void);
+static handler_state_t	__ictrl_cd(void);
+static handler_state_t	__ictrl_l(void);
+static handler_state_t	__ictrl_q(void);
 
-static inline handler_state_t	__iseq(void);
+static handler_state_t	__iseq(void);
 
 // IHLT - Input Handlers Lookup Table
 static const input_handler_t	__ihlt[] = {
 	[KEY_CTRL('C') ... KEY_CTRL('D')] = __ictrl_cd,
-	[KEY_CTRL('|') /* '\t' */ ] = __ispace,
+	['\t'] = __isuggestions,
 	[KEY_CTRL('J') /* '\n' */ ] = __inew_line,
 	['\v'] = __ispace,
 	[KEY_CTRL('L') /* '\f' */ ] = __ictrl_l,
