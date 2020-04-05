@@ -10,9 +10,7 @@
 
 typedef enum e_command_queue_type {
 	CQ_DEFAULT,
-# define CQ_DEFAULT CQ_DEFAULT
 	CQ_PIPE,
-# define CQ_PIPE CQ_PIPE
 } msh_attr_pack cq_type_t;
 
 struct command {

@@ -76,6 +76,7 @@ static inline struct tk_key	*token_last_word(size_t ilword, size_t ibuff,
 		struct tk_key *restrict ltok) {
 	if (ilword >= ibuff)
 		return ltok;
+	dll_obj_t *restrict	new_obj;
 	struct tk_key	tk;
 	size_t	last_len = ibuff - ilword;
 
@@ -84,13 +85,15 @@ static inline struct tk_key	*token_last_word(size_t ilword, size_t ibuff,
 		switch (line[ilword]) {
 			case '|': {
 				tk.type = TK_PIPE;
-				return get_key(dll_pushback(tokens, &tk, sizeof(tk),
-					TK_DLL_BITS, del_token));
+				dll_assert(new_obj = dll_pushback(tokens, &tk, sizeof(tk),
+					DLL_BIT_DUP, del_token));
+				return get_key(new_obj);
 			}
 			case ';': {
 				tk.type = TK_MULTI_CMD;
-				return get_key(dll_pushback(tokens, &tk, sizeof(tk),
-					TK_DLL_BITS, del_token));
+				dll_assert(new_obj = dll_pushback(tokens, &tk, sizeof(tk),
+					DLL_BIT_DUP, del_token));
+				return get_key(new_obj);
 			}
 			case ' ': return ltok;
 			default: break ;
@@ -102,8 +105,9 @@ static inline struct tk_key	*token_last_word(size_t ilword, size_t ibuff,
 	tk_type_t	tk_type = (('$' == *str) ? TK_ENV_VAR : TK_EXEC);
 	tk = (struct tk_key) { str, last_len, tk_type };
 	if (('$' == *str) || !dll_getlast(tokens)) {
-		return get_key(dll_pushback(tokens, &tk, sizeof(tk),
-			TK_DLL_BITS, del_token));
+		dll_assert(new_obj = dll_pushback(tokens, &tk, sizeof(tk),
+			DLL_BIT_DUP, del_token));
+		return get_key(new_obj);
 	}
 	switch (ltok->type) {
 		case TK_OPT:
@@ -118,16 +122,18 @@ static inline struct tk_key	*token_last_word(size_t ilword, size_t ibuff,
 		default: tk_type = TK_EXEC; break ;
 	}
 	tk.type = tk_type;
-	return get_key(dll_pushback(tokens, &tk, sizeof(tk),
-		TK_DLL_BITS, del_token));
+	dll_assert(new_obj = dll_pushback(tokens, &tk, sizeof(tk),
+		DLL_BIT_DUP, del_token));
+	return get_key(new_obj);
 }
 
 static inline dll_t	*tokenize_line_to_dll(char *restrict line) {
-	dll_t	*out = dll_init(DLL_GBIT_QUIET);
-	struct tk_key	*lkey = NULL;
+	dll_t *restrict	out = NULL;
+	struct tk_key *restrict	lkey = NULL;
 	size_t	ilword = 0;
 	size_t	i = 0;
 
+	dll_assert(out = dll_init(DLL_BIT_DFLT));
 	while (line[i]) {
 		if (' ' == line[i] || !line[i + 1]) {
 			size_t	ilword_len = i + (!line[i + 1] && ' ' != line[i]);

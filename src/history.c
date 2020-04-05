@@ -32,7 +32,7 @@ void	save_history(void) {
 }
 
 void	read_history(void) {
-	g_session_history = dll_init(DLL_GBIT_QUIET);
+	dll_assert(g_session_history = dll_init(DLL_BIT_EIGN));
 	char *restrict	dst_path = get_dst_path();
 
 	FILE *restrict	file = fopen(dst_path, "r");

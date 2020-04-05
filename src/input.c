@@ -1,12 +1,149 @@
 #include "minishell.h"
 
-#define MSH_RAW_MODE_H
-#include "msh_raw_mode.h"
-#undef MSH_RAW_MODE_H
+#include <termios.h>
 
-#define MSH_INPUT_DATA
-#include "msh_input_data.h"
-#undef MSH_INPUT_DATA
+static struct termios	termios_save;
+
+static inline void	input_disable_raw_mode(void) {
+	tcsetattr(STDIN_FILENO, TCSAFLUSH, &termios_save);
+}
+
+static inline void	input_raw_mode(void) {
+	tcgetattr(STDIN_FILENO, &termios_save);
+
+	struct termios	raw = termios_save;
+	raw.c_iflag &= ~(ISTRIP | INPCK | IXON);
+	raw.c_lflag &= ~(ICANON | ISIG | IEXTEN | ECHO);
+	raw.c_lflag |= (ECHONL | ECHOE | ECHOK);
+	raw.c_cflag |= (CS8);
+	raw.c_cc[VMIN] = 0;
+	raw.c_cc[VTIME] = 1;
+	tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+
+	atexit(input_disable_raw_mode);
+}
+
+//	hs == handler state from Input Lookup State[]
+typedef enum e_handler_state {
+	HS_CONTINUE = 0, // All input, just continue parsing
+	HS_STOP,         // Ctrl+D, Ctrl+C or '\n'
+	HS_EXIT,         // Ctrl+Q
+	HS_EOF,          // read() error
+} msh_attr_pack handler_state_t;
+
+//	is == input state from key_read()
+typedef enum e_input_state {
+	IS_CHAR = 0, // Single character input
+	IS_SEQ,      // Escape Sequence
+	IS_EOF,      // read() error
+} msh_attr_pack input_state_t;
+
+typedef handler_state_t	(*input_handler_t)(void);
+
+#define INPUT_BUFF_SIZE 8096
+#define MAX_SEQ_BYTES 4
+
+static char	g_ch[MAX_SEQ_BYTES] = { 0 };
+static char	g_buff[INPUT_BUFF_SIZE] = { 0 };
+static size_t	g_ibuff = 0;
+static size_t	g_buff_len = 0;
+
+static dll_obj_t *restrict	g_input_save = NULL;
+static dll_obj_t *restrict	g_history_current = NULL;
+
+static dll_t *restrict	g_currdir_suggestions = NULL;
+static size_t	g_suggest_bytes_printed = 0;
+
+struct suggest_obj {
+	char *restrict	name;
+	size_t	name_len;
+	bool	selected;
+};
+
+static void	suggest_del(void *restrict data) {
+	struct suggest_obj	*so = data;
+	free(so->name);
+	free(so);
+}
+
+static int	suggest_item_print(const void *restrict data) {
+	const struct suggest_obj *restrict	so = data;
+	if (so->selected)
+		g_suggest_bytes_printed += fwrite(">", 1, 1, stdout);
+	fwrite(so->name, so->name_len, 1, stdout);
+	fwrite(" ", 1, 1, stdout);
+	g_suggest_bytes_printed += so->name_len + 1;
+	return 0;
+}
+
+static inline dll_t	*init_suggestions(void) {
+	dll_t	*out;
+	dll_assert(out = dll_init(DLL_BIT_DFLT));
+
+	char	*dirname;
+	assert(dirname = get_current_dir_name());
+
+	struct dirent	*d = NULL;
+	DIR	*dir = opendir(dirname);
+	free(dirname);
+	if (!dir)
+		assert_perror(errno);
+
+	struct suggest_obj	s;
+	while ((d = readdir(dir))) {
+		assert(s.name = strdup(d->d_name));
+		s.name_len = strlen(d->d_name);
+		s.selected = 0;
+		dll_assert(dll_pushback(out, &s, sizeof(s), DLL_BIT_DUP, suggest_del));
+	}
+	if (-1 == closedir(dir))
+		assert_perror(errno);
+	return out;
+}
+
+static inline void	refresh_global_input_data(void) {
+	bzero(g_buff, g_buff_len);
+	dll_free(g_currdir_suggestions);
+	g_currdir_suggestions = init_suggestions();
+	if (g_input_save) {
+		dll_assert(dll_freeobj(g_input_save));
+		g_input_save = NULL;
+	}
+	g_ibuff = g_buff_len = 0;
+}
+
+# define KEY_DEL 0x7f
+# define KEY_ESC 0x1b
+# define KEY_CTRL_MASK 0x1f
+# define KEY_CTRL(k) ((k) & KEY_CTRL_MASK)
+
+static handler_state_t	__ispace(void);
+static handler_state_t	__inew_line(void);
+static handler_state_t	__iprintable(void);
+static handler_state_t	__ihome_path(void);
+static handler_state_t	__idelch(void);
+static handler_state_t	__isuggestions(void);
+
+static handler_state_t	__ictrl_cd(void);
+static handler_state_t	__ictrl_l(void);
+static handler_state_t	__ictrl_q(void);
+
+static handler_state_t	__iseq(void);
+
+// IHLT - Input Handlers Lookup Table
+static const input_handler_t	__ihlt[] = {
+	[KEY_CTRL('C') ... KEY_CTRL('D')] = __ictrl_cd,
+	['\t'] = __isuggestions,
+	[KEY_CTRL('J') /* '\n' */ ] = __inew_line,
+	['\v'] = __ispace,
+	[KEY_CTRL('L') /* '\f' */ ] = __ictrl_l,
+	['\r'] = __ispace,
+	[KEY_CTRL('Q')] = __ictrl_q,
+	[' '] = __ispace,
+	['!' ... '}'] = __iprintable,
+	['~'] = __ihome_path,
+	[KEY_DEL] = __idelch,
+};
 
 // Handle key presses
 static handler_state_t	__ispace(void) {
@@ -60,54 +197,7 @@ static handler_state_t	__idelch(void) {
 	return HS_CONTINUE;
 }
 
-static void	suggest_del(void *restrict data) {
-	struct suggest_obj	*so = data;
-	free(so->name);
-	free(so);
-}
-
-static inline dll_t	*__iinit_suggestions(void) {
-	dll_t	*out = dll_init(DLL_GBIT_QUIET);
-
-	char	*dirname;
-	assert(dirname = get_current_dir_name());
-
-	struct dirent	*d = NULL;
-	DIR	*dir = opendir(dirname);
-
-	free(dirname);
-	if (!dir) {
-		perror("opendir");
-		return NULL;
-	}
-	struct suggest_obj	so;
-	while ((d = readdir(dir))) {
-		assert(so.name = strdup(d->d_name));
-		so.name_len = strlen(d->d_name);
-		so.selected = 0;
-		dll_pushback(out, &so, sizeof(so),
-			DLL_BIT_EIGN | DLL_BIT_DUP, suggest_del);
-	}
-	assert_perror(-1 == closedir(dir));
-	return out;
-}
-
-static size_t	g_suggest_printed = 0;
-
-static int	suggest_item_print(const void *restrict data) {
-	const struct suggest_obj *restrict	so = data;
-	if (so->selected)
-		g_suggest_printed += fwrite(">", 1, 1, stdout);
-	fwrite(so->name, so->name_len, 1, stdout);
-	fwrite(" ", 1, 1, stdout);
-	g_suggest_printed += so->name_len + 1;
-	return 0;
-};
-
 static inline handler_state_t	__isuggestions(void) {
-	if (!g_currdir_suggestions
-	&& !(g_currdir_suggestions = __iinit_suggestions()))
-		return HS_CONTINUE;
 	static dll_obj_t *restrict	last;
 	if (!last) {
 		last = dll_gethead(g_currdir_suggestions);
@@ -117,15 +207,15 @@ static inline handler_state_t	__isuggestions(void) {
 	}
 	if (!last)
 		return HS_CONTINUE;
-	if (g_suggest_printed) {
+	if (g_suggest_bytes_printed) {
 		fwrite("\x1b[1A", 4, 1, stdout);
-		size_t	i = g_suggest_printed;
+		size_t	i = g_suggest_bytes_printed;
 		while (i--)
 			fwrite(" ", 1, 1, stdout);
-		i = g_suggest_printed;
+		i = g_suggest_bytes_printed;
 		while (i--)
 			putchar('\b');
-		g_suggest_printed = 0;
+		g_suggest_bytes_printed = 0;
 
 		fwrite("\x1b[1A", 4, 1, stdout);
 		i = 32;
@@ -144,7 +234,7 @@ static inline handler_state_t	__isuggestions(void) {
 		fwrite(g_buff + g_ibuff, g_buff_len - g_ibuff, 1, stdout);
 	putchar('\n');
 	so->selected = 1;
-	dll_print(g_currdir_suggestions, suggest_item_print);
+	dll_assert(dll_print(g_currdir_suggestions, suggest_item_print));
 	so->selected = 0;
 	return HS_CONTINUE;
 }
@@ -198,12 +288,12 @@ static inline void	__ihistory_updatesave(dll_obj_t *restrict obj) {
 			char *restrict	save_str = dll_getdata(g_input_save);
 			if (strcmp(save_str, g_buff)) {
 				dll_freeobj(g_input_save);
-				g_input_save = dll_new(strdup(g_buff), g_buff_len,
-					DLL_BIT_EIGN | DLL_BIT_FREE, NULL);
+				dll_assert(g_input_save = dll_new(strdup(g_buff), g_buff_len,
+					DLL_BIT_EIGN | DLL_BIT_FREE, NULL));
 			}
 		} else if (!g_input_save) {
-			g_input_save = dll_new(strdup(g_buff), g_buff_len,
-				DLL_BIT_EIGN | DLL_BIT_FREE, NULL);
+			dll_assert(g_input_save = dll_new(strdup(g_buff), g_buff_len,
+				DLL_BIT_EIGN | DLL_BIT_FREE, NULL));
 		}
 	}
 }
