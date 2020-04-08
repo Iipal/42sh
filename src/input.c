@@ -161,9 +161,16 @@ static handler_state_t	__inew_line(void) {
 }
 
 static handler_state_t	__iprintable(void) {
-	g_buff[g_ibuff++] = g_ch[0];
-	++g_buff_len;
 	putchar(g_ch[0]);
+	if (g_buff[g_ibuff]) {
+		size_t	shifted_cursor = g_buff_len - g_ibuff;
+		strncpy(g_buff + g_ibuff + 1, g_buff + g_ibuff, shifted_cursor);
+		fwrite(g_buff + g_ibuff + 1, shifted_cursor, 1, stdout);
+		while (shifted_cursor--)
+			putchar('\b');
+	}
+	++g_buff_len;
+	g_buff[g_ibuff++] = g_ch[0];
 	return HS_CONTINUE;
 }
 
@@ -184,16 +191,16 @@ static handler_state_t	__idelch(void) {
 	if (g_buff[g_ibuff]) {
 		putchar('\b');
 		size_t	cursor_shifted = g_buff_len - g_ibuff;
-		strcpy(g_buff + g_ibuff - 1, g_buff + g_ibuff);
+		strncpy(g_buff + g_ibuff - 1, g_buff + g_ibuff, cursor_shifted);
 		fwrite(g_buff + g_ibuff - 1, cursor_shifted, 1, stdout);
 		fwrite(" \b", 2, 1, stdout);
 		while (cursor_shifted--)
 			putchar('\b');
 	} else {
 		fwrite("\b \b", 3, 1, stdout);;
-		g_buff[--g_ibuff] = 0;
 	}
-	--g_buff_len;
+	--g_ibuff;
+	g_buff[--g_buff_len] = 0;
 	return HS_CONTINUE;
 }
 
