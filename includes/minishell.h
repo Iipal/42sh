@@ -23,6 +23,7 @@
 # include "libdll.h"
 
 # include "msh_global.h"
+# include "msh_dbg_info.h"
 # include "msh_cmd.h"
 # include "msh_builtins.h"
 # include "msh_dll_token.h"

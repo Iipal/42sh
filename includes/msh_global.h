@@ -3,7 +3,6 @@
 
 // Non-zero value if -d(--debug) option was detected
 extern int	g_opt_dbg_level;
-# include "msh_dbg_info.h"
 
 // Non-zero value if -h(--help) option was detected
 extern int	g_opt_help;
