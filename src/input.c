@@ -2,6 +2,9 @@
 
 #include <termios.h>
 
+# define FILL_EMPTY_LINE "                                                                                                                                                                                     "
+# define FILL_MOVE_BACK "\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b\b"
+
 static struct termios	termios_save;
 
 static inline void	input_disable_raw_mode(void) {
@@ -52,6 +55,7 @@ static dll_obj_t *restrict	g_input_save = NULL;
 static dll_obj_t *restrict	g_history_current = NULL;
 
 static dll_t *restrict	g_currdir_suggestions = NULL;
+static dll_obj_t *restrict	g_selected_suggest = NULL;
 static size_t	g_suggest_bytes_printed = 0;
 
 struct suggest_obj {
@@ -66,14 +70,14 @@ static void	suggest_del(void *restrict data) {
 	free(so);
 }
 
-static int	suggest_item_print(const void *restrict data) {
-	const struct suggest_obj *restrict	so = data;
-	if (so->selected)
-		g_suggest_bytes_printed += fwrite(">", 1, 1, stdout);
-	fwrite(so->name, so->name_len, 1, stdout);
-	fwrite(" ", 1, 1, stdout);
-	g_suggest_bytes_printed += so->name_len + 1;
-	return 0;
+static inline void	clear_suggestion_from_screen(const struct suggest_obj *restrict so) {
+	size_t	prompt_len_printed = g_buff_len + so->name_len + (sizeof("$> ") - 1);
+	fwrite(FILL_MOVE_BACK, prompt_len_printed, 1, stdout);
+	fwrite(FILL_EMPTY_LINE, prompt_len_printed, 1, stdout);
+	fwrite(FILL_MOVE_BACK, prompt_len_printed, 1, stdout);
+	fwrite("\x1b[1A", 4, 1, stdout);
+	fwrite(FILL_EMPTY_LINE, g_suggest_bytes_printed, 1, stdout);
+	fwrite(FILL_MOVE_BACK, g_suggest_bytes_printed, 1, stdout);
 }
 
 static inline dll_t	*init_suggestions(void) {
@@ -104,12 +108,11 @@ static inline dll_t	*init_suggestions(void) {
 static inline void	refresh_global_input_data(void) {
 	bzero(g_buff, g_buff_len);
 	dll_free(g_currdir_suggestions);
+	dll_freeobj(g_input_save);
 	g_currdir_suggestions = init_suggestions();
-	if (g_input_save) {
-		dll_assert(dll_freeobj(g_input_save));
-		g_input_save = NULL;
-	}
-	g_ibuff = g_buff_len = 0;
+	g_input_save = NULL;
+	g_selected_suggest = NULL;
+	g_ibuff = g_buff_len = g_suggest_bytes_printed = 0;
 }
 
 # define KEY_DEL 0x7f
@@ -149,15 +152,48 @@ static const input_handler_t	__ihlt[] = {
 static handler_state_t	__ispace(void) {
 	if (g_ibuff && ' ' != g_buff[g_ibuff - 1]) {
 		putchar(' ');
-		g_buff[g_ibuff++] = ' ';
+		size_t	shifted_cursor = g_buff_len - g_ibuff;
+		if (shifted_cursor) {
+			strncpy(g_buff + g_ibuff + 1, g_buff + g_ibuff, shifted_cursor);
+			fwrite(g_buff + g_ibuff + 1, shifted_cursor, 1, stdout);
+			fwrite(FILL_MOVE_BACK, shifted_cursor, 1, stdout);
+		}
 		++g_buff_len;
+		g_buff[g_ibuff++] = ' ';
 	}
 	return HS_CONTINUE;
 }
 
 static handler_state_t	__inew_line(void) {
-	putchar('\n');
-	return HS_STOP;
+	if (g_selected_suggest) {
+		struct suggest_obj *restrict	so;
+		dll_assert(so = dll_getdata(g_selected_suggest));
+
+		size_t	cursor_shifted = g_buff_len - g_ibuff;
+		if (cursor_shifted) {
+			char *restrict	save = strndupa(g_buff + g_ibuff, cursor_shifted);
+			memcpy(g_buff + g_ibuff, so->name, so->name_len);
+			g_ibuff += so->name_len;
+			memcpy(g_buff + g_ibuff, save, cursor_shifted);
+			g_buff_len += so->name_len;
+		} else {
+			memcpy(g_buff + g_ibuff, so->name, so->name_len);
+			g_ibuff += so->name_len;
+			g_buff_len += so->name_len;
+		}
+
+		clear_suggestion_from_screen(so);
+		fwrite("$> ", 3, 1, stdout);
+		fwrite(g_buff, g_buff_len, 1, stdout);
+		fwrite(FILL_MOVE_BACK, cursor_shifted, 1, stdout);
+
+		g_selected_suggest = NULL;
+		g_suggest_bytes_printed = 0;
+		return HS_CONTINUE;
+	} else {
+		putchar('\n');
+		return HS_STOP;
+	}
 }
 
 static handler_state_t	__iprintable(void) {
@@ -166,8 +202,7 @@ static handler_state_t	__iprintable(void) {
 		size_t	shifted_cursor = g_buff_len - g_ibuff;
 		strncpy(g_buff + g_ibuff + 1, g_buff + g_ibuff, shifted_cursor);
 		fwrite(g_buff + g_ibuff + 1, shifted_cursor, 1, stdout);
-		while (shifted_cursor--)
-			putchar('\b');
+		fwrite(FILL_MOVE_BACK, shifted_cursor, 1, stdout);
 	}
 	++g_buff_len;
 	g_buff[g_ibuff++] = g_ch[0];
@@ -186,16 +221,26 @@ static handler_state_t	__ihome_path(void) {
 }
 
 static handler_state_t	__idelch(void) {
+	if (g_selected_suggest) {
+		struct suggest_obj *restrict	so;
+		dll_assert(so = dll_getdata(g_selected_suggest));
+		clear_suggestion_from_screen(so);
+		fwrite("$> ", 3, 1, stdout);
+		fwrite(g_buff, g_buff_len, 1, stdout);
+		fwrite(FILL_MOVE_BACK, g_buff_len - g_ibuff, 1, stdout);
+		g_selected_suggest = NULL;
+		g_suggest_bytes_printed = 0;
+		return HS_CONTINUE;
+	}
 	if (!g_ibuff)
 		return HS_CONTINUE;
 	if (g_buff[g_ibuff]) {
-		putchar('\b');
 		size_t	cursor_shifted = g_buff_len - g_ibuff;
 		strncpy(g_buff + g_ibuff - 1, g_buff + g_ibuff, cursor_shifted);
+		putchar('\b');
 		fwrite(g_buff + g_ibuff - 1, cursor_shifted, 1, stdout);
 		fwrite(" \b", 2, 1, stdout);
-		while (cursor_shifted--)
-			putchar('\b');
+		fwrite(FILL_MOVE_BACK, cursor_shifted, 1, stdout);
 	} else {
 		fwrite("\b \b", 3, 1, stdout);;
 	}
@@ -204,45 +249,51 @@ static handler_state_t	__idelch(void) {
 	return HS_CONTINUE;
 }
 
-static inline handler_state_t	__isuggestions(void) {
-	static dll_obj_t *restrict	last;
-	if (!last) {
-		last = dll_gethead(g_currdir_suggestions);
-	} else {
-		if (!(last = dll_getnext(last)))
-			last = dll_gethead(g_currdir_suggestions);
-	}
-	if (!last)
-		return HS_CONTINUE;
-	if (g_suggest_bytes_printed) {
-		fwrite("\x1b[1A", 4, 1, stdout);
-		size_t	i = g_suggest_bytes_printed;
-		while (i--)
-			fwrite(" ", 1, 1, stdout);
-		i = g_suggest_bytes_printed;
-		while (i--)
-			putchar('\b');
-		g_suggest_bytes_printed = 0;
-
-		fwrite("\x1b[1A", 4, 1, stdout);
-		i = 32;
-		while (i--)
-			fwrite(" ", 1, 1, stdout);
-		i = 32;
-		while (i--)
-			fwrite("\b", 1, 1, stdout);
-		fwrite("$> ", 3, 1, stdout);
-		fwrite(g_buff, g_ibuff, 1, stdout);
-	}
-
-	struct suggest_obj *restrict	so = dll_getdata(last);
+static int	suggest_item_print(const void *restrict data) {
+	const struct suggest_obj *restrict	so = data;
+	if (so->selected)
+		g_suggest_bytes_printed += fwrite(">", 1, 1, stdout);
 	fwrite(so->name, so->name_len, 1, stdout);
-	if (g_buff[g_ibuff])
-		fwrite(g_buff + g_ibuff, g_buff_len - g_ibuff, 1, stdout);
-	putchar('\n');
+	fwrite(" ", 1, 1, stdout);
+	g_suggest_bytes_printed += so->name_len + 1;
+	return 0;
+}
+
+static inline handler_state_t	__isuggestions(void) {
+	static dll_obj_t *restrict	prev;
+	if (!g_selected_suggest && prev != dll_getlast(g_currdir_suggestions)) {
+		g_selected_suggest = dll_gethead(g_currdir_suggestions);
+	} else {
+		if (!(g_selected_suggest = dll_getnext(g_selected_suggest)))
+			g_selected_suggest = dll_gethead(g_currdir_suggestions);
+	}
+
+	if (!g_selected_suggest) {
+		g_suggest_bytes_printed = 0;
+		return HS_CONTINUE;
+	}
+
+	if (g_suggest_bytes_printed) {
+		struct suggest_obj *restrict	pso;
+		dll_assert(pso = dll_getdata(prev));
+		clear_suggestion_from_screen(pso);
+		g_suggest_bytes_printed = 0;
+	} else {
+		fwrite(FILL_MOVE_BACK, g_ibuff + sizeof("$> ") - 1, 1, stdout);
+	}
+	struct suggest_obj *restrict	so = dll_getdata(g_selected_suggest);
 	so->selected = 1;
 	dll_assert(dll_print(g_currdir_suggestions, suggest_item_print));
 	so->selected = 0;
+	fwrite("\n$> ", 4, 1, stdout);
+	fwrite(g_buff, g_ibuff, 1, stdout);
+	fwrite(so->name, so->name_len, 1, stdout);
+	size_t cursor_shifted = g_buff_len - g_ibuff;
+	if (cursor_shifted) {
+		fwrite(g_buff + g_ibuff, cursor_shifted, 1, stdout);
+		fwrite(FILL_MOVE_BACK, cursor_shifted, 1, stdout);
+	}
+	prev = g_selected_suggest;
 	return HS_CONTINUE;
 }
 
