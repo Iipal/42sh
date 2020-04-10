@@ -1,5 +1,6 @@
 #include "minishell.h"
 
+static inline void	bdebug(const struct command *restrict cmd);
 static inline void	becho(const struct command *restrict cmd);
 static inline void	bcd(const struct command *restrict cmd);
 static inline void	benv(const struct command *restrict cmd);
@@ -13,6 +14,7 @@ struct s_builtin_data_set {
 	void	(*bfnptr)(const struct command *restrict cmd);
 	size_t	max_argc;
 } __bds[] = {
+	{ "dbg"     , bdebug   , 1 },
 	{ "echo"    , becho    , ~((size_t)0) },
 	{ "cd"      , bcd      , 3 },
 	{ "env"     , benv     , ~((size_t)0) },
@@ -28,6 +30,16 @@ static inline bool	bunsupported(void) {
 		"\tType 'help' for more information.\n",
 		program_invocation_short_name);
 	return false;
+}
+
+static inline void	bdebug(const struct command *restrict cmd) {
+	(void)cmd;
+	g_opt_dbg_level = !g_opt_dbg_level;
+	if (g_opt_dbg_level) {
+		printf("debug info activated\n");
+	} else {
+		printf("debug info deactivated\n");
+	}
 }
 
 static inline void	becho(const struct command *restrict cmd) {
@@ -148,6 +160,7 @@ static inline void	bhelp(const struct command *restrict cmd) {
 		return ;
 	}
 	printf("Builtins help:\n"
+		"\tdbg     \tDe-\\Activate debug info\n"
 		"\techo    \tdisplay a line of text\n"
 		"\tcd      \tchange the current directory\n"
 		"\tsetenv  \tadd the variable to the environment\n"
