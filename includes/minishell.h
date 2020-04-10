@@ -48,5 +48,6 @@ void	cmd_pipe_queuing(const ssize_t isender,
 
 void	read_history(void);
 void	save_history(void);
+void	add_to_history(char *cmd_line, size_t line_len);
 
 #endif /* MINISHELL_H */

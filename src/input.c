@@ -342,7 +342,7 @@ static int find_buff_dup(const void *restrict data) {
 
 static inline void	__ihistory_updatesave(dll_obj_t *restrict obj) {
 	if (obj != g_input_save) {
-		if (g_input_save && !dll_findkeyr(g_session_history, find_buff_dup)) {
+		if (g_input_save && !dll_findkeyr(g_history, find_buff_dup)) {
 			char *restrict	save_str = dll_getdata(g_input_save);
 			if (strcmp(save_str, g_buff)) {
 				dll_freeobj(g_input_save);
@@ -377,7 +377,7 @@ static inline void	__ihistory_base(
 		dll_obj_t *(*fn_get_head)(const dll_t *restrict)) {
 	if (!g_history_current) {
 		__ihistory_updatesave((void*)0x1);
-		if (!(g_history_current = fn_get_head(g_session_history))) {
+		if (!(g_history_current = fn_get_head(g_history))) {
 			if (!g_input_save)
 				return ;
 			g_history_current = g_input_save;

@@ -150,7 +150,7 @@ bexit(const struct command *restrict cmd) {
 		exit_status = atoi(cmd->argv[1]);
 
 	save_history();
-	dll_free(g_session_history);
+	dll_free(g_history);
 	_Exit(exit_status);
 }
 

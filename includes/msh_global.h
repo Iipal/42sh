@@ -11,6 +11,8 @@ extern int	g_opt_help;
 extern pid_t	g_child;
 
 // Current session commands history
-extern dll_t *restrict	g_session_history;
+extern dll_t *restrict	g_history;
+
+# define MAX_HISTORY_SIZE 50
 
 #endif /* MSH_GLOBAL_H */
