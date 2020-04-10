@@ -9,5 +9,4 @@ int	main(int argc, char *argv[]) {
 	read_history();
 	init_sig_handlers();
 	shell();
-	cmd_fast_builtinrun(CMD_FAST_NEW(1, "exit", NULL));
 }

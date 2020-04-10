@@ -105,10 +105,14 @@ static inline dll_t	*init_suggestions(void) {
 	return out;
 }
 
-static inline void	refresh_global_input_data(void) {
-	bzero(g_buff, g_buff_len);
+static inline void	free_global_input_data(void) {
 	dll_free(g_currdir_suggestions);
 	dll_freeobj(g_input_save);
+}
+
+static inline void	refresh_global_input_data(void) {
+	bzero(g_buff, g_buff_len);
+	free_global_input_data();
 	g_currdir_suggestions = init_suggestions();
 	g_input_save = NULL;
 	g_selected_suggest = NULL;
@@ -305,18 +309,30 @@ static handler_state_t	__ictrl_cd(void) {
 }
 
 static handler_state_t	__ictrl_l(void) {
+	size_t	cursor_shifted = g_buff_len - g_ibuff;
 	fwrite("\x1b[2J\x1b[H$> ", 10, 1, stdout);
 	fwrite(g_buff, g_buff_len, 1, stdout);
-	size_t	cursor_shifted = g_buff_len - g_ibuff;
-	while (cursor_shifted--)
-		putchar('\b');
+	fwrite(FILL_MOVE_BACK, cursor_shifted, 1, stdout);
 	return HS_CONTINUE;
 }
 
 static handler_state_t	__ictrl_q(void) {
-	if (!g_ibuff)
-		puts("exit");
-	refresh_global_input_data();
+	size_t	cursor_shifted = g_buff_len - g_ibuff;
+
+	if (cursor_shifted)
+		fwrite(FILL_EMPTY_LINE, cursor_shifted, 1, stdout);
+	if (g_buff_len) {
+		size_t	start_line_len = sizeof("\r$> ") - 1;
+		fwrite("\r$> ", start_line_len, 1, stdout);
+		fwrite(FILL_EMPTY_LINE, g_buff_len, 1, stdout);
+		fwrite("\r$> ", start_line_len, 1, stdout);
+	}
+	fwrite("exit\n", sizeof("exit\n") - 1, 1, stdout);
+
+	free_global_input_data();
+	strcpy(g_buff, "exit");
+	g_ibuff = g_buff_len = sizeof("exit") - 1;
+	g_buff[g_ibuff] = 0;
 	return HS_EXIT;
 }
 
@@ -358,15 +374,17 @@ static inline void	__ihistory_updatesave(dll_obj_t *restrict obj) {
 
 static inline void	__ihistory_putdata(dll_obj_t *restrict obj) {
 	char *restrict	str = dll_getdata(obj);
-	size_t len = dll_getdatasize(obj);
+	size_t	len = dll_getdatasize(obj);
+	size_t	cursor_shifted = g_buff_len - g_ibuff;
 
 	if (g_buff_len) {
-		if (g_buff[g_ibuff])
-			fwrite(g_buff + g_ibuff, g_buff_len - g_ibuff, 1, stdout);
+		if (cursor_shifted)
+			fwrite(g_buff + g_ibuff, cursor_shifted, 1, stdout);
 		bzero(g_buff, g_buff_len);
 	}
-	while (g_buff_len--)
-		fwrite("\b \b", 3, 1, stdout);
+	fwrite("\r$> ", sizeof("\r$> ") - 1, 1, stdout);
+	fwrite(FILL_EMPTY_LINE, g_buff_len, 1, stdout);
+	fwrite(FILL_MOVE_BACK, g_buff_len, 1, stdout);
 	fwrite(str, len, 1, stdout);
 	strcpy(g_buff, str);
 	g_ibuff = g_buff_len = len;
