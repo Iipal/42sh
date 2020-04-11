@@ -152,14 +152,13 @@ static inline dll_t	*tokenize_line_to_dll(char *restrict line) {
 	return out;
 }
 
-static int	print_token(const void *restrict data) {
+static int	print_token(const void *restrict data, size_t idx) {
 	static const char	*token_types[] = {
 		"EXEC", "OPT", "ARG", "PIPE", "REDIR", "REDIRA", "REDIRD", "SEMI", "ENV"
 	};
 	const struct tk_key *restrict	key = data;
 
-	DBG_INFO(" -- %s: '%s'\n",
-		token_types[key->type],
+	DBG_INFO(" -- [%2zu]: %s: '%s'\n", idx, token_types[key->type],
 		key->str ? key->str : "(null)");
 	return 0;
 }

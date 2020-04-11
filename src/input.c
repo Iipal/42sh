@@ -253,7 +253,8 @@ static handler_state_t	__idelch(void) {
 	return HS_CONTINUE;
 }
 
-static int	suggest_item_print(const void *restrict data) {
+static int	suggest_item_print(const void *restrict data, size_t idx) {
+	(void)idx;
 	const struct suggest_obj *restrict	so = data;
 	if (so->selected)
 		g_suggest_bytes_printed += fwrite(">", 1, 1, stdout);
