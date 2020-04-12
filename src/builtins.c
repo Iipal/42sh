@@ -73,7 +73,7 @@ static inline void	bhistory(const struct command *restrict cmd) {
 
 		optind = 1;
 		int opt;
-		while (-1 != (opt = getopt(cmd->argc, cmd->argv, ":cd:"))) {
+		while (-1 != (opt = getopt(cmd->argc, cmd->argv, "cd:"))) {
 			switch (opt) {
 				case 'c': {
 					char	*history_file_path;
@@ -237,7 +237,7 @@ static inline void	bexit(const struct command *restrict cmd) {
 		exit_status = atoi(cmd->argv[1]);
 
 	save_history();
-	dll_assert(dll_free(&g_history));
+	dll_free(&g_history);
 	_Exit(exit_status);
 }
 

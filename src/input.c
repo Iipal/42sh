@@ -107,14 +107,13 @@ static inline dll_t	*init_suggestions(void) {
 
 static inline void	free_global_input_data(void) {
 	dll_free(&g_currdir_suggestions);
-	dll_freeobj(g_input_save);
+	dll_freeobj(&g_input_save);
 }
 
 static inline void	refresh_global_input_data(void) {
 	bzero(g_buff, g_buff_len);
 	free_global_input_data();
 	g_currdir_suggestions = init_suggestions();
-	g_input_save = NULL;
 	g_selected_suggest = NULL;
 	g_ibuff = g_buff_len = g_suggest_bytes_printed = 0;
 }
@@ -362,7 +361,7 @@ static inline void	__ihistory_updatesave(dll_obj_t *restrict obj) {
 		if (g_input_save && !dll_findkeyr(g_history, find_buff_dup, g_buff)) {
 			char *restrict	save_str = dll_getdata(g_input_save);
 			if (strcmp(save_str, g_buff)) {
-				dll_freeobj(g_input_save);
+				dll_freeobj(&g_input_save);
 				dll_assert(g_input_save = dll_new(strdup(g_buff), g_buff_len,
 					DLL_BIT_EIGN | DLL_BIT_FREE, NULL));
 			}

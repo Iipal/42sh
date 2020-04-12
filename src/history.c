@@ -56,7 +56,7 @@ void	read_history(void) {
 		if (MAX_HISTORY_SIZE <= dll_getsize(g_history))
 			dll_popfront(g_history);
 
-		--nb; // do not duplicate new line characted at the end of str
+		--nb;
 		dll_pushback(g_history, strndup(str, nb), nb, DLL_BIT_FREE | DLL_BIT_EIGN, NULL);
 
 		free(str);
