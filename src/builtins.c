@@ -1,6 +1,7 @@
 #include "minishell.h"
 
 static inline void	bdebug(const struct command *restrict cmd);
+static inline void	bhistory(const struct command *restrict cmd);
 static inline void	becho(const struct command *restrict cmd);
 static inline void	bcd(const struct command *restrict cmd);
 static inline void	benv(const struct command *restrict cmd);
@@ -15,6 +16,7 @@ struct s_builtin_data_set {
 	size_t	max_argc;
 } __bds[] = {
 	{ "dbg"     , bdebug   , 1 },
+	{ "history" , bhistory , 3 },
 	{ "echo"    , becho    , ~((size_t)0) },
 	{ "cd"      , bcd      , 3 },
 	{ "env"     , benv     , ~((size_t)0) },
@@ -40,6 +42,92 @@ static inline void	bdebug(const struct command *restrict cmd) {
 	} else {
 		printf("debug info deactivated\n");
 	}
+}
+
+static int	bhistory_print(const void *restrict data, size_t index) {
+	const char *restrict	str = data;
+	printf("\t[%2zu]: %s\n", index, str);
+	return 0;
+}
+
+static inline void	bhistory(const struct command *restrict cmd) {
+	const size_t	history_size = dll_getsize(g_history);
+
+	if (1 == cmd->argc) {
+		dll_assert(dll_print(g_history, bhistory_print));
+	} else if ('-' != cmd->argv[1][0]) {
+		size_t	find_index = atol(cmd->argv[1]);
+
+		if (find_index > history_size) {
+			fprintf(stderr, "history: %zu index is out of history indexing range(1 - %zu)\n",
+				find_index, history_size);
+		} else {
+			dll_obj_t *restrict	obj = dll_findid(g_history, find_index);
+			dll_printone(obj, bhistory_print, dll_getid(g_history, obj));
+		}
+	} else {
+		if (2 != strlen(cmd->argv[1])) {
+			fprintf(stderr, "history: invalid option or only 1 flag must be specified -- '%c'\n", cmd->argv[1][1]);
+			goto bhistory_help_message;
+		}
+
+		optind = 1;
+		int opt;
+		while (-1 != (opt = getopt(cmd->argc, cmd->argv, ":cd:"))) {
+			switch (opt) {
+				case 'c': {
+					char	*history_file_path;
+
+					if (0 < asprintf(&history_file_path, "%s/%s", getpwuid(getuid())->pw_dir, ".msh_history")) {
+						if (-1 == remove(history_file_path)) {
+							fprintf(stderr, "history: remove(%s): %s\n",
+								history_file_path, strerror(errno));
+						} else {
+							printf("history file(%s) deleted.\n", history_file_path);
+							while (dll_popfront(g_history))
+								;
+							printf("%zu history entries deleted.\n", history_size);
+						}
+						free(history_file_path);
+					} else {
+						fprintf(stderr, "history: failed to allocate memory to history file path\n");
+					}
+					break ;
+				}
+				case 'd': {
+					size_t	start_pos = atol(optarg);
+					if (start_pos > history_size) {
+						fprintf(stderr, "history: %zu index is out of history indexing range(1 - %zu)\n",
+							start_pos, history_size);
+						return ;
+					}
+
+					char *restrict	end_pos_separator = strchr(optarg, '-');
+					size_t	deleted_objects = 0;
+					if (!end_pos_separator) {
+						deleted_objects = dll_deln(g_history, start_pos, dll_getsize(g_history));
+					} else {
+						size_t end_pos = atol(end_pos_separator + 1);
+						deleted_objects = dll_deln(g_history, start_pos, end_pos - start_pos);
+					}
+					printf("%zu history entries deleted.\n", deleted_objects);
+					break ;
+				}
+				default: {
+					fprintf(stderr, "history: invalid option -- '%c'\n", opt);
+					return ;
+				}
+			}
+		}
+	}
+	return ;
+bhistory_help_message:
+	printf("\nhistory [n]\nhistory -c\nhistory -d [offset]\nhistory -d [start-end]\n"
+		" With no options, display the command history list with line numbers.\n"
+		"\t[n]           \tPrint N-index element from history list.\n"
+		"\t-c            \tClear the history list by deleting all the entries and history file\n"
+		"\t-d [offset]   \tDelete the history entries at and after position [offset]\n"
+		"\t-d [start-end]\tDelete the history entries at and after position [start] to position [end]\n");
 }
 
 static inline void	becho(const struct command *restrict cmd) {
@@ -70,7 +158,7 @@ becho_help_message:
 	printf("Usage: echo [SHORT-OPTION]... [STRING]...\n"
 		"  or : echo LONG-OPTION\n"
 		"Echo the STRING(s) to standard output.\n"
-		"\t-n\tdo not output the trailing newline\n"
+		"\t-n    \tdo not output the trailing newline\n"
 		"\t--help\tdisplay this help and exit\n");
 }
 
@@ -143,14 +231,13 @@ static inline void	bunsetenv(const struct command *restrict cmd) {
 	}
 }
 
-static inline __attribute__((noreturn)) void
-bexit(const struct command *restrict cmd) {
+static inline void	bexit(const struct command *restrict cmd) {
 	int	exit_status = EXIT_SUCCESS;
 	if (2 == cmd->argc)
 		exit_status = atoi(cmd->argv[1]);
 
 	save_history();
-	dll_free(g_history);
+	dll_assert(dll_free(&g_history));
 	_Exit(exit_status);
 }
 

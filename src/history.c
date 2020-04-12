@@ -9,20 +9,15 @@ void	add_to_history(char *cmd_line, size_t line_len) {
 	dll_pushback(g_history, cmd_line, line_len, DLL_BIT_FREE | DLL_BIT_EIGN, NULL);
 }
 
-static inline char	*get_dst_path(void) {
-	const char	dest[] = "/.msh_history";
-	char *restrict	home = getpwuid(getuid())->pw_dir;
-	size_t	home_len = strlen(home);
-	char *restrict	dst_path = NULL;
-
-	assert(dst_path = calloc(home_len + sizeof(dest), 1));
-	strcpy(dst_path, home);
-	strcpy(dst_path + home_len, dest);
-	return dst_path;
+static inline char	*get_history_file_path(void) {
+	char	*history_file_path;
+	assert_perror(0 >= asprintf(&history_file_path, "%s/%s",
+				getpwuid(getuid())->pw_dir, ".msh_history"));
+	return history_file_path;
 }
 
 void	save_history(void) {
-	char *restrict	dst_path = get_dst_path();
+	char *restrict	dst_path = get_history_file_path();
 	FILE *restrict	file = fopen(dst_path, "w+");
 	free(dst_path);
 	if (!file) {
@@ -44,7 +39,7 @@ void	save_history(void) {
 
 void	read_history(void) {
 	dll_assert(g_history = dll_init(DLL_BIT_EIGN));
-	char *restrict	dst_path = get_dst_path();
+	char *restrict	dst_path = get_history_file_path();
 
 	FILE *restrict	file = fopen(dst_path, "r");
 	free(dst_path);
@@ -53,19 +48,23 @@ void	read_history(void) {
 
 	char	*str = NULL;
 	size_t	__dummy_nb = 0;
-	ssize_t nb = getline(&str, &__dummy_nb, file);
+	ssize_t nb;
 
-	while (EOF != nb || 0 < nb) {
+	while (EOF != (nb = getline(&str, &__dummy_nb, file))) {
+		if (!nb)
+			continue ;
 		if (MAX_HISTORY_SIZE <= dll_getsize(g_history))
 			dll_popfront(g_history);
 
 		--nb; // do not duplicate new line characted at the end of str
 		dll_pushback(g_history, strndup(str, nb), nb, DLL_BIT_FREE | DLL_BIT_EIGN, NULL);
 
+		free(str);
 		str = NULL;
 		__dummy_nb = 0;
-		nb = getline(&str, &__dummy_nb, file);
 	}
+	if (str)
+		free(str);
 	fclose(file);
 	DBG_INFO("Readed %zu history elements\n", dll_getsize(g_history));
 }

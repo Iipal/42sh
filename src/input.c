@@ -106,7 +106,7 @@ static inline dll_t	*init_suggestions(void) {
 }
 
 static inline void	free_global_input_data(void) {
-	dll_free(g_currdir_suggestions);
+	dll_free(&g_currdir_suggestions);
 	dll_freeobj(g_input_save);
 }
 
@@ -350,8 +350,8 @@ static inline void	__imove_cursos_right(void) {
 		fwrite(g_buff + g_ibuff++, 1, 1, stdout);
 }
 
-static int find_buff_dup(const void *restrict data) {
-	int	ret = strcmp(g_buff, data);
+static int find_buff_dup(const void *restrict data, void *restrict buff_cmp) {
+	int	ret = strcmp(buff_cmp, data);
 	if (0 > ret)
 		ret = 1;
 	return ret;
@@ -359,7 +359,7 @@ static int find_buff_dup(const void *restrict data) {
 
 static inline void	__ihistory_updatesave(dll_obj_t *restrict obj) {
 	if (obj != g_input_save) {
-		if (g_input_save && !dll_findkeyr(g_history, find_buff_dup)) {
+		if (g_input_save && !dll_findkeyr(g_history, find_buff_dup, g_buff)) {
 			char *restrict	save_str = dll_getdata(g_input_save);
 			if (strcmp(save_str, g_buff)) {
 				dll_freeobj(g_input_save);
@@ -488,6 +488,7 @@ char	*input_read(void) {
 
 	switch (hs) {
 		case HS_STOP: {
+			free_global_input_data();
 			if (!g_buff_len)
 				return INPUT_CONTINUE;
 			return strndup(g_buff, g_buff_len);

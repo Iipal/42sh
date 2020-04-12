@@ -12,14 +12,6 @@ void	cq_free(struct command_queue *restrict cq) {
 	free(cq);
 }
 
-static void	del_token(void *restrict data) {
-	struct tk_key *restrict	tk = data;
-	if (tk->str) {
-		free(tk->str);
-	}
-	free(tk);
-}
-
 static inline struct command_queue	*tokens_to_cq(dll_t *restrict tokens) {
 	static dll_obj_t *restrict	last_obj;
 	dll_obj_t *restrict iobj =
@@ -69,7 +61,13 @@ static inline struct command_queue	*tokens_to_cq(dll_t *restrict tokens) {
 	return cq;
 }
 
-#define get_key(obj) ((struct tk_key*)dll_getdata(obj))
+static void	del_token(void *restrict data) {
+	struct tk_key *restrict	tk = data;
+	if (tk->str) {
+		free(tk->str);
+	}
+	free(tk);
+}
 
 static inline struct tk_key	*token_last_word(size_t ilword, size_t ibuff,
 		char *restrict line, dll_t *restrict tokens,
@@ -87,13 +85,13 @@ static inline struct tk_key	*token_last_word(size_t ilword, size_t ibuff,
 				tk.type = TK_PIPE;
 				dll_assert(new_obj = dll_pushback(tokens, &tk, sizeof(tk),
 					DLL_BIT_DUP, del_token));
-				return get_key(new_obj);
+				return dll_getdata(new_obj);
 			}
 			case ';': {
 				tk.type = TK_MULTI_CMD;
 				dll_assert(new_obj = dll_pushback(tokens, &tk, sizeof(tk),
 					DLL_BIT_DUP, del_token));
-				return get_key(new_obj);
+				return dll_getdata(new_obj);
 			}
 			case ' ': return ltok;
 			default: break ;
@@ -106,8 +104,8 @@ static inline struct tk_key	*token_last_word(size_t ilword, size_t ibuff,
 	tk = (struct tk_key) { str, last_len, tk_type };
 	if (('$' == *str) || !dll_getlast(tokens)) {
 		dll_assert(new_obj = dll_pushback(tokens, &tk, sizeof(tk),
-			DLL_BIT_DUP, del_token));
-		return get_key(new_obj);
+			DLL_BIT_DUP | DLL_BIT_EIGN, del_token));
+		return dll_getdata(new_obj);
 	}
 	switch (ltok->type) {
 		case TK_OPT:
@@ -123,8 +121,8 @@ static inline struct tk_key	*token_last_word(size_t ilword, size_t ibuff,
 	}
 	tk.type = tk_type;
 	dll_assert(new_obj = dll_pushback(tokens, &tk, sizeof(tk),
-		DLL_BIT_DUP, del_token));
-	return get_key(new_obj);
+		DLL_BIT_DUP | DLL_BIT_EIGN, del_token));
+	return dll_getdata(new_obj);
 }
 
 static inline dll_t	*tokenize_line_to_dll(char *restrict line) {
@@ -180,6 +178,7 @@ void	shell(void) {
 		} else if (INPUT_CONTINUE == line) {
 			continue ;
 		}
+
 		tokens = tokenize_line_to_dll(line);
 		if (g_opt_dbg_level)
 			dll_print(tokens, print_token);
@@ -190,7 +189,8 @@ void	shell(void) {
 			cq_free(cq);
 			cq = tokens_to_cq(NULL);
 		}
-		dll_free(tokens);
+		dll_free(&tokens);
+
 		add_to_history(line, strlen(line));
 	}
 }
