@@ -216,7 +216,7 @@ static handler_state_t	__ihome_path(void) {
 	char *restrict	home = getpwuid(getuid())->pw_dir;
 	size_t	home_len = strlen(home);
 
-	strncpy(g_buff + g_ibuff, home, home_len);
+	strcpy(g_buff + g_ibuff, home);
 	fwrite(g_buff + g_ibuff, home_len, 1, stdout);
 	g_ibuff += home_len;
 	g_buff_len += home_len;

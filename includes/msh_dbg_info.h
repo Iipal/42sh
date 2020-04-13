@@ -20,7 +20,15 @@ static inline void	__dbg_info_dflt(const char *restrict fmt, ...) {
 	va_end(ap);
 }
 
-static void	(*__dbg_lvl_callback[2])(const char *restrict fmt, ...) = {
+static
+# ifndef __clang__
+/**
+ * GCC doesn't recognize use of this varible only inside macro DBG_INFO.
+ * This attribute required to ignore compiler errors about this.
+ */
+__attribute__((unused))
+# endif /* __clang__ */
+void	(*__dbg_lvl_callback[2])(const char *restrict fmt, ...) = {
 	__dbg_info_none, __dbg_info_dflt
 };
 

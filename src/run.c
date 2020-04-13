@@ -41,6 +41,13 @@ inline void	cmd_solorun(const struct command *restrict cmd) {
 		case  0:
 			DBG_INFO("child  | %d(%d) %s\n", getpid(), getppid(), cmd->argv[0]);
 			execvp(cmd->argv[0], cmd->argv);
+# ifndef __clang__
+/**
+ * GCC doesn't allow to fall through switch-casese
+ * This attribute required to ignore compiler errors about this.
+ */
+			__attribute__((fallthrough));
+# endif /* __clang__ */
 		case -1:
 			errx(EXIT_FAILURE, "%s: command not found...", cmd->argv[0]);
 			break ;
