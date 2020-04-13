@@ -130,21 +130,21 @@ static handler_state_t	__ihome_path(void);
 static handler_state_t	__idelch(void);
 static handler_state_t	__isuggestions(void);
 
-static handler_state_t	__ictrl_cd(void);
+static handler_state_t	__ictrl_c(void);
 static handler_state_t	__ictrl_l(void);
-static handler_state_t	__ictrl_q(void);
+static handler_state_t	__ictrl_d(void);
 
 static handler_state_t	__iseq(void);
 
 // IHLT - Input Handlers Lookup Table
 static const input_handler_t	__ihlt[] = {
-	[KEY_CTRL('C') ... KEY_CTRL('D')] = __ictrl_cd,
+	[KEY_CTRL('C')] = __ictrl_c,
+	[KEY_CTRL('D')] = __ictrl_d,
 	['\t'] = __isuggestions,
 	[KEY_CTRL('J') /* '\n' */ ] = __inew_line,
 	['\v'] = __ispace,
 	[KEY_CTRL('L') /* '\f' */ ] = __ictrl_l,
 	['\r'] = __ispace,
-	[KEY_CTRL('Q')] = __ictrl_q,
 	[' '] = __ispace,
 	['!' ... '}'] = __iprintable,
 	['~'] = __ihome_path,
@@ -302,7 +302,7 @@ static inline handler_state_t	__isuggestions(void) {
 }
 
 // Handle keys what pressed with Ctrl
-static handler_state_t	__ictrl_cd(void) {
+static handler_state_t	__ictrl_c(void) {
 	refresh_global_input_data();
 	fwrite("\n$> ", 4, 1, stdout);
 	return HS_CONTINUE;
@@ -316,7 +316,7 @@ static handler_state_t	__ictrl_l(void) {
 	return HS_CONTINUE;
 }
 
-static handler_state_t	__ictrl_q(void) {
+static handler_state_t	__ictrl_d(void) {
 	size_t	cursor_shifted = g_buff_len - g_ibuff;
 
 	if (cursor_shifted)
