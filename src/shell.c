@@ -150,7 +150,8 @@ static inline dll_t	*tokenize_line_to_dll(char *restrict line) {
 	return out;
 }
 
-static int	print_token(const void *restrict data, size_t idx) {
+static int	print_token(void *restrict data, void *restrict ptr, size_t idx) {
+	(void)ptr;
 	static const char	*token_types[] = {
 		"EXEC", "OPT", "ARG", "PIPE", "REDIR", "REDIRA", "REDIRD", "SEMI", "ENV"
 	};

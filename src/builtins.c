@@ -44,7 +44,8 @@ static inline void	bdebug(const struct command *restrict cmd) {
 	}
 }
 
-static int	bhistory_print(const void *restrict data, size_t index) {
+static int	bhistory_print(void *restrict data, void *restrict ptr, size_t index) {
+	(void)ptr;
 	const char *restrict	str = data;
 	printf("\t[%2zu]: %s\n", index, str);
 	return 0;
@@ -63,7 +64,7 @@ static inline void	bhistory(const struct command *restrict cmd) {
 				find_index, history_size);
 		} else {
 			dll_obj_t *restrict	obj = dll_findid(g_history, find_index);
-			dll_printone(obj, bhistory_print, dll_getid(g_history, obj));
+			dll_printone(obj, bhistory_print);
 		}
 	} else {
 		if (2 != strlen(cmd->argv[1])) {

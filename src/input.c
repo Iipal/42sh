@@ -245,15 +245,16 @@ static handler_state_t	__idelch(void) {
 		fwrite(" \b", 2, 1, stdout);
 		fwrite(FILL_MOVE_BACK, cursor_shifted, 1, stdout);
 	} else {
-		fwrite("\b \b", 3, 1, stdout);;
+		fwrite("\b \b", 3, 1, stdout);
 	}
 	--g_ibuff;
 	g_buff[--g_buff_len] = 0;
 	return HS_CONTINUE;
 }
 
-static int	suggest_item_print(const void *restrict data, size_t idx) {
+static int	suggest_item_print(void *restrict data, void *restrict ptr, size_t idx) {
 	(void)idx;
+	(void)ptr;
 	const struct suggest_obj *restrict	so = data;
 	if (so->selected)
 		g_suggest_bytes_printed += fwrite(">", 1, 1, stdout);
@@ -264,8 +265,8 @@ static int	suggest_item_print(const void *restrict data, size_t idx) {
 }
 
 static inline handler_state_t	__isuggestions(void) {
-	static dll_obj_t *restrict	prev;
-	if (!g_selected_suggest && prev != dll_getlast(g_currdir_suggestions)) {
+	static dll_obj_t *restrict	last;
+	if (!g_selected_suggest && last != dll_getlast(g_currdir_suggestions)) {
 		g_selected_suggest = dll_gethead(g_currdir_suggestions);
 	} else {
 		if (!(g_selected_suggest = dll_getnext(g_selected_suggest)))
@@ -279,7 +280,7 @@ static inline handler_state_t	__isuggestions(void) {
 
 	if (g_suggest_bytes_printed) {
 		struct suggest_obj *restrict	pso;
-		dll_assert(pso = dll_getdata(prev));
+		dll_assert(pso = dll_getdata(last));
 		clear_suggestion_from_screen(pso);
 		g_suggest_bytes_printed = 0;
 	} else {
@@ -297,7 +298,7 @@ static inline handler_state_t	__isuggestions(void) {
 		fwrite(g_buff + g_ibuff, cursor_shifted, 1, stdout);
 		fwrite(FILL_MOVE_BACK, cursor_shifted, 1, stdout);
 	}
-	prev = g_selected_suggest;
+	last = g_selected_suggest;
 	return HS_CONTINUE;
 }
 
@@ -349,7 +350,8 @@ static inline void	__imove_cursos_right(void) {
 		fwrite(g_buff + g_ibuff++, 1, 1, stdout);
 }
 
-static int find_buff_dup(const void *restrict data, void *restrict buff_cmp) {
+static int find_buff_dup(void *restrict data, void *restrict buff_cmp, size_t idx) {
+	(void)idx;
 	int	ret = strcmp(buff_cmp, data);
 	if (0 > ret)
 		ret = 1;
