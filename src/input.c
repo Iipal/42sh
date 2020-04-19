@@ -61,6 +61,8 @@ static size_t	g_suggest_bytes_printed = 0;
 struct suggest_obj {
 	char *restrict	name;
 	size_t	name_len;
+	size_t	real_len;
+	size_t	offset;
 	bool	selected;
 };
 
@@ -176,16 +178,14 @@ static handler_state_t	__inew_line(void) {
 		if (cursor_shifted) {
 			char *restrict	save = strndupa(g_buff + g_ibuff, cursor_shifted);
 			memcpy(g_buff + g_ibuff, so->name, so->name_len);
-			g_ibuff += so->name_len;
-			memcpy(g_buff + g_ibuff, save, cursor_shifted);
-			g_buff_len += so->name_len;
+			memcpy(g_buff + g_ibuff + so->real_len, save, cursor_shifted);
 		} else {
-			memcpy(g_buff + g_ibuff, so->name, so->name_len);
-			g_ibuff += so->name_len;
-			g_buff_len += so->name_len;
+			memcpy(g_buff + g_ibuff, so->name + so->offset, so->real_len);
 		}
 
 		clear_suggestion_from_screen(so);
+		g_ibuff += so->real_len;
+		g_buff_len += so->real_len;
 		fwrite("$> ", 3, 1, stdout);
 		fwrite(g_buff, g_buff_len, 1, stdout);
 		fwrite(FILL_MOVE_BACK, cursor_shifted, 1, stdout);
@@ -264,13 +264,41 @@ static int	suggest_item_print(void *restrict data, void *restrict ptr, size_t id
 	return 0;
 }
 
+static int	find_suggests_match(void *restrict data, void *restrict ptr, size_t idx) {
+	(void)idx;
+	struct suggest_obj *restrict	obj = data;
+	struct suggest_obj *restrict	find = ptr;
+	int	ret = 0;
+	if (0 != find->name_len)
+		ret = strncmp(obj->name, find->name, find->name_len);
+	return !ret ? 0 : 1;
+}
+
 static inline handler_state_t	__isuggestions(void) {
-	static dll_obj_t *restrict	last;
-	if (!g_selected_suggest && last != dll_getlast(g_currdir_suggestions)) {
-		g_selected_suggest = dll_gethead(g_currdir_suggestions);
+	static dll_t *restrict	suggests = NULL;
+	static dll_obj_t *restrict	last = NULL;
+	static char *restrict	str_last_search = NULL;
+	struct suggest_obj	find_so = { NULL, 0, 0, 0, 0 };
+	char *restrict	str_find = strrchr(g_buff, ' ');
+
+	if (str_find && strlen(str_find)) {
+		find_so.name = str_find + 1;
+		find_so.offset = find_so.real_len = find_so.name_len = g_buff_len - (find_so.name - g_buff);
+	} else {
+		find_so.name = g_buff;
+		find_so.real_len = find_so.name_len = find_so.offset = g_buff_len;
+	}
+	if (!str_last_search || (str_last_search && strcmp(find_so.name, str_last_search))) {
+		dll_assert_perror(suggests = dll_dupkey(g_currdir_suggestions,
+			find_suggests_match, &find_so, 1, dll_getsize(g_currdir_suggestions)));
+		str_last_search = strdup(find_so.name);
+	}
+
+	if (!g_selected_suggest && last != dll_getlast(suggests)) {
+		g_selected_suggest = dll_gethead(suggests);
 	} else {
 		if (!(g_selected_suggest = dll_getnext(g_selected_suggest)))
-			g_selected_suggest = dll_gethead(g_currdir_suggestions);
+			g_selected_suggest = dll_gethead(suggests);
 	}
 
 	if (!g_selected_suggest) {
@@ -284,15 +312,20 @@ static inline handler_state_t	__isuggestions(void) {
 		clear_suggestion_from_screen(pso);
 		g_suggest_bytes_printed = 0;
 	} else {
-		fwrite(FILL_MOVE_BACK, g_ibuff + sizeof("$> ") - 1, 1, stdout);
+		size_t	prompt_size = sizeof("$> ") - 1;
+		fwrite(FILL_MOVE_BACK, g_ibuff + prompt_size, 1, stdout);
+		fwrite(FILL_EMPTY_LINE, g_buff_len + prompt_size, 1, stdout);
+		fwrite(FILL_MOVE_BACK, g_buff_len + prompt_size, 1, stdout);
 	}
 	struct suggest_obj *restrict	so = dll_getdata(g_selected_suggest);
 	so->selected = 1;
-	dll_assert(dll_print(g_currdir_suggestions, suggest_item_print));
+	dll_assert(dll_print(suggests, suggest_item_print));
 	so->selected = 0;
+	so->offset = find_so.offset;
+	so->real_len = so->name_len - find_so.offset;
 	fwrite("\n$> ", 4, 1, stdout);
 	fwrite(g_buff, g_ibuff, 1, stdout);
-	fwrite(so->name, so->name_len, 1, stdout);
+	fwrite(so->name + so->offset, so->real_len, 1, stdout);
 	size_t cursor_shifted = g_buff_len - g_ibuff;
 	if (cursor_shifted) {
 		fwrite(g_buff + g_ibuff, cursor_shifted, 1, stdout);
