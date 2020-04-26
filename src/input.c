@@ -252,7 +252,7 @@ static handler_state_t	__idelch(void) {
 	return HS_CONTINUE;
 }
 
-static int	suggest_item_print(void *restrict data, void *restrict ptr, size_t idx) {
+static ssize_t	suggest_item_print(void *restrict data, void *restrict ptr, size_t idx) {
 	(void)idx;
 	(void)ptr;
 	const struct suggest_obj *restrict	so = data;
@@ -264,7 +264,7 @@ static int	suggest_item_print(void *restrict data, void *restrict ptr, size_t id
 	return 0;
 }
 
-static int	find_suggests_match(void *restrict data, void *restrict ptr, size_t idx) {
+static ssize_t	find_suggests_match(void *restrict data, void *restrict ptr, size_t idx) {
 	(void)idx;
 	struct suggest_obj *restrict	obj = data;
 	struct suggest_obj *restrict	find = ptr;
@@ -289,7 +289,7 @@ static inline handler_state_t	__isuggestions(void) {
 		find_so.real_len = find_so.name_len = find_so.offset = g_buff_len;
 	}
 	if (!str_last_search || (str_last_search && strcmp(find_so.name, str_last_search))) {
-		dll_assert_perror(suggests = dll_dupkey(g_currdir_suggestions,
+		dll_assert_soft(suggests = dll_dupkey(g_currdir_suggestions,
 			find_suggests_match, &find_so, 1, dll_getsize(g_currdir_suggestions)));
 		str_last_search = strdup(find_so.name);
 	}
@@ -319,7 +319,7 @@ static inline handler_state_t	__isuggestions(void) {
 	}
 	struct suggest_obj *restrict	so = dll_getdata(g_selected_suggest);
 	so->selected = 1;
-	dll_assert(dll_print(suggests, suggest_item_print));
+	dll_assert_soft(dll_print(suggests, suggest_item_print));
 	so->selected = 0;
 	so->offset = find_so.offset;
 	so->real_len = so->name_len - find_so.offset;
@@ -383,9 +383,9 @@ static inline void	__imove_cursos_right(void) {
 		fwrite(g_buff + g_ibuff++, 1, 1, stdout);
 }
 
-static int find_buff_dup(void *restrict data, void *restrict buff_cmp, size_t idx) {
+static ssize_t find_buff_dup(void *restrict data, void *restrict buff_cmp, size_t idx) {
 	(void)idx;
-	int	ret = strcmp(buff_cmp, data);
+	ssize_t	ret = strcmp(buff_cmp, data);
 	if (0 > ret)
 		ret = 1;
 	return ret;
@@ -393,7 +393,7 @@ static int find_buff_dup(void *restrict data, void *restrict buff_cmp, size_t id
 
 static inline void	__ihistory_updatesave(dll_obj_t *restrict obj) {
 	if (obj != g_input_save) {
-		if (g_input_save && !dll_findkeyr(g_history, find_buff_dup, g_buff)) {
+		if (g_input_save && !dll_findr(g_history, find_buff_dup, g_buff)) {
 			char *restrict	save_str = dll_getdata(g_input_save);
 			if (strcmp(save_str, g_buff)) {
 				dll_freeobj(&g_input_save);

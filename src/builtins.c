@@ -44,7 +44,7 @@ static inline void	bdebug(const struct command *restrict cmd) {
 	}
 }
 
-static int	bhistory_print(void *restrict data, void *restrict ptr, size_t index) {
+static ssize_t	bhistory_print(void *restrict data, void *restrict ptr, size_t index) {
 	(void)ptr;
 	const char *restrict	str = data;
 	printf("\t[%2zu]: %s\n", index, str);

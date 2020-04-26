@@ -12,6 +12,25 @@ void	cq_free(struct command_queue *restrict cq) {
 	free(cq);
 }
 
+static void	del_token(void *restrict data) {
+	struct tk_key *restrict	tk = data;
+	if (tk->str) {
+		free(tk->str);
+	}
+	free(tk);
+}
+static ssize_t	print_token(void *restrict data, void *restrict ptr, size_t idx) {
+	(void)ptr;
+	static const char	*token_types[] = {
+		"EXEC", "OPT", "ARG", "PIPE", "REDIR", "REDIRA", "REDIRD", "SEMI", "ENV"
+	};
+	const struct tk_key *restrict	key = data;
+
+	DBG_INFO(" -- [%2zu]: %s: '%s'\n", idx, token_types[key->type],
+		key->str ? key->str : "(null)");
+	return 0;
+}
+
 static inline struct command_queue	*tokens_to_cq(dll_t *restrict tokens) {
 	static dll_obj_t *restrict	last_obj;
 	dll_obj_t *restrict iobj =
@@ -59,14 +78,6 @@ static inline struct command_queue	*tokens_to_cq(dll_t *restrict tokens) {
 		last_obj = iobj = iobj->next;
 	};
 	return cq;
-}
-
-static void	del_token(void *restrict data) {
-	struct tk_key *restrict	tk = data;
-	if (tk->str) {
-		free(tk->str);
-	}
-	free(tk);
 }
 
 static inline struct tk_key	*token_last_word(size_t ilword, size_t ibuff,
@@ -148,18 +159,6 @@ static inline dll_t	*tokenize_line_to_dll(char *restrict line) {
 		++i;
 	}
 	return out;
-}
-
-static int	print_token(void *restrict data, void *restrict ptr, size_t idx) {
-	(void)ptr;
-	static const char	*token_types[] = {
-		"EXEC", "OPT", "ARG", "PIPE", "REDIR", "REDIRA", "REDIRD", "SEMI", "ENV"
-	};
-	const struct tk_key *restrict	key = data;
-
-	DBG_INFO(" -- [%2zu]: %s: '%s'\n", idx, token_types[key->type],
-		key->str ? key->str : "(null)");
-	return 0;
 }
 
 void	shell(void) {

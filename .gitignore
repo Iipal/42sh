@@ -8,4 +8,6 @@
 test/
 **.gitkeep
 **.out
+msh
+42sh
 minishell
