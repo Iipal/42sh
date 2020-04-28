@@ -51,15 +51,56 @@ static ssize_t	bhistory_print(void *restrict data, void *restrict ptr, size_t in
 	return 0;
 }
 
+static inline void	bhistory_optd(void) {
+	size_t	start_pos = atol(optarg);
+	if (start_pos > dll_getsize(g_history)) {
+		fprintf(stderr, "history: %zu index is out of history indexing range(1 - %zu)\n",
+			start_pos, dll_getsize(g_history));
+		return ;
+	}
+
+	char *restrict	end_pos_separator = strchr(optarg, '-');
+	size_t	deleted_objects = 0;
+	if (!end_pos_separator) {
+		deleted_objects = dll_deln(g_history, start_pos, dll_getsize(g_history));
+	} else {
+		size_t end_pos = atol(end_pos_separator + 1);
+		deleted_objects = dll_deln(g_history, start_pos, end_pos - start_pos);
+	}
+	printf("%zu history entries deleted.\n", deleted_objects);
+}
+static inline void	bhistory_optc(void) {
+	char	*history_file_path;
+
+	if (0 < asprintf(&history_file_path, "%s/%s", getpwuid(getuid())->pw_dir, ".msh_history")) {
+		if (-1 == remove(history_file_path)) {
+			fprintf(stderr, "history: remove(%s): %s\n",
+				history_file_path, strerror(errno));
+		} else {
+			printf("history file(%s) deleted.\n", history_file_path);
+			while (dll_popfront(g_history))
+				;
+			printf("%zu history entries deleted.\n", dll_getsize(g_history));
+		}
+		free(history_file_path);
+	} else {
+		fprintf(stderr, "history: failed to allocate memory to history file path\n");
+	}
+}
 static inline void	bhistory(const struct command *restrict cmd) {
 	const size_t	history_size = dll_getsize(g_history);
 
 	if (1 == cmd->argc) {
 		dll_assert(dll_print(g_history, bhistory_print));
 	} else if ('-' != cmd->argv[1][0]) {
-		size_t	find_index = atol(cmd->argv[1]);
+		for (size_t i = 0; cmd->argv[1][i]; ++i)
+			if (!isdigit(cmd->argv[1][i])) {
+				fprintf(stderr, "history: only unsigned number allowed or specify the flag with '-' symbol\n");
+				return ;
+			}
 
-		if (find_index > history_size) {
+		size_t	find_index = atol(cmd->argv[1]);
+		if (!find_index || find_index > history_size) {
 			fprintf(stderr, "history: %zu index is out of history indexing range(1 - %zu)\n",
 				find_index, history_size);
 		} else {
@@ -74,46 +115,13 @@ static inline void	bhistory(const struct command *restrict cmd) {
 
 		optind = 1;
 		int opt;
-		while (-1 != (opt = getopt(cmd->argc, cmd->argv, "cd:"))) {
+		while (-1 != (opt = getopt(cmd->argc, cmd->argv, "d:c"))) {
 			switch (opt) {
-				case 'c': {
-					char	*history_file_path;
-
-					if (0 < asprintf(&history_file_path, "%s/%s", getpwuid(getuid())->pw_dir, ".msh_history")) {
-						if (-1 == remove(history_file_path)) {
-							fprintf(stderr, "history: remove(%s): %s\n",
-								history_file_path, strerror(errno));
-						} else {
-							printf("history file(%s) deleted.\n", history_file_path);
-							while (dll_popfront(g_history))
-								;
-							printf("%zu history entries deleted.\n", history_size);
-						}
-						free(history_file_path);
-					} else {
-						fprintf(stderr, "history: failed to allocate memory to history file path\n");
-					}
+				case 'd':
+					msh_attr_fallthrough;
+				case 'c':
+					(void (*[2])(void)) { bhistory_optd, bhistory_optc } ['d' - opt]();
 					break ;
-				}
-				case 'd': {
-					size_t	start_pos = atol(optarg);
-					if (start_pos > history_size) {
-						fprintf(stderr, "history: %zu index is out of history indexing range(1 - %zu)\n",
-							start_pos, history_size);
-						return ;
-					}
-
-					char *restrict	end_pos_separator = strchr(optarg, '-');
-					size_t	deleted_objects = 0;
-					if (!end_pos_separator) {
-						deleted_objects = dll_deln(g_history, start_pos, dll_getsize(g_history));
-					} else {
-						size_t end_pos = atol(end_pos_separator + 1);
-						deleted_objects = dll_deln(g_history, start_pos, end_pos - start_pos);
-					}
-					printf("%zu history entries deleted.\n", deleted_objects);
-					break ;
-				}
 				default: {
 					fprintf(stderr, "history: invalid option -- '%c'\n", opt);
 					return ;
